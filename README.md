@@ -146,6 +146,6 @@ lowrank-field-adapters/
 
 ---
 
-**Autores**: [Tu nombre aquí] y equipo  
+**Autores**: Anndy-bit
 **Fecha de inicio**: Julio 2026  
 **Proyecto**: S³ — Spectral-Spatial-Smooth Fine-Tuning para VRAM limitada
