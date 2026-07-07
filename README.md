@@ -55,7 +55,7 @@ donde $\Sigma_k m_\theta(\sigma) \in \mathbb{R}^k$ son los valores singulares mo
 
 ### Arquitectura S³
 
-Los tres operadores se composen en una capa híbrida por cada capa del transformer. Para la $l$-ésima capa con pesos $W^{(l)} = U^{(l)}\Sigma^{(l)}V^{(l)}^T$:
+Los tres operadores se composen en una capa híbrida por cada capa del transformer. Para la capa $l$ con pesos $W_l = U_l \Sigma_l V_l$:
 
 1. **SVMO**: Modifica los valores singulares $\sigma_i^{(l)} \mapsto m_\theta(\sigma_i^{(l)})$.
 2. **STB**: Aplica cross-attention espectral entre la firma de la representación $h^{(l)}$ y los valores singulares modificados.
