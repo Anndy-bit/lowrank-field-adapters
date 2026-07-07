@@ -73,12 +73,13 @@ class SpectralCoupling(nn.Module):
         sigma_log: torch.Tensor,
     ) -> torch.Tensor:
         Q = self.W_q(s)
-        K = self.W_k(sigma_log).unsqueeze(0)
+        K = self.W_k(sigma_log)
         V = self.W_v(s)
 
         attn = (Q @ K.transpose(-2, -1)) * self.scale
+        attn = attn.squeeze(1)
         attn_weights = F.softmax(attn, dim=-1)
-        delta = self.W_o(attn_weights * V).squeeze(1)
+        delta = self.W_o(attn_weights @ V).squeeze(1)
 
         return s + self.beta * delta
 

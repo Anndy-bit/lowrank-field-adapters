@@ -277,15 +277,35 @@ def main():
     output_cfg = config["output"]
     os.makedirs(output_cfg["checkpoint_dir"], exist_ok=True)
     os.makedirs(output_cfg["results_dir"], exist_ok=True)
+    monitor = None
+
+    monitor_dir = os.path.join(output_cfg["results_dir"], "monitoring")
+    os.makedirs(monitor_dir, exist_ok=True)
+
+    from src.training.training_monitor import TrainingMonitor
+    monitor = TrainingMonitor(
+        device=args.device,
+        log_dir=monitor_dir,
+        sample_interval=2.0,
+        print_interval=5,
+        project_name=f"s3_{config['model']['name'].split('/')[-1].lower()}",
+    )
+    monitor.start()
 
     def log_fn(stats):
         pass
 
-    print("[S³] Starting frugal training...")
+    print("[S³] Starting frugal training with full monitoring...")
     t_start = time.time()
-    trainer.train(dataloader, log_fn=log_fn)
+    trainer.train(dataloader, log_fn=log_fn, monitor=monitor)
     elapsed = time.time() - t_start
     print(f"[S³] Training complete in {elapsed:.1f}s ({elapsed/3600:.1f}h)")
+
+    monitor.stop()
+
+    from src.training.training_monitor import generate_plots, print_paper_table
+    generate_plots(monitor_dir, monitor.run_id)
+    print_paper_table(monitor_dir, monitor.run_id)
 
     ckpt_path = os.path.join(output_cfg["checkpoint_dir"], "checkpoint.pt")
     trainer.save_checkpoint(ckpt_path)

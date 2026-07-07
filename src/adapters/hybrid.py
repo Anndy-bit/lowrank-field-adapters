@@ -74,6 +74,8 @@ class S3TransformerLayer(nn.Module):
         nmf_solver: str = "rk4",
         stb_head_dim: Optional[int] = None,
         stb_beta: float = 0.5,
+        enable_sbs: bool = True,
+        sbs_p: float = 0.3,
     ):
         super().__init__()
 
@@ -109,6 +111,8 @@ class S3TransformerLayer(nn.Module):
         self.stb = STBBridge(
             self.svmo_q.U_k.detach().clone(), svmo_k, stb_head_dim, stb_beta
         )
+        self.enable_sbs = enable_sbs
+        self.sbs_p = sbs_p
 
         self.nmf_attn, self.nmf_mlp = create_nmf_pair(
             dim, nmf_bottleneck, nmf_T, nmf_N, nmf_solver
@@ -176,8 +180,12 @@ class S3TransformerLayer(nn.Module):
     ) -> Tuple[torch.Tensor, ...]:
         residual = hidden_states
 
+        B, S, D = hidden_states.shape
+        hidden_states_flat = hidden_states.reshape(-1, D)
         sigma_log = torch.log(self.svmo_q._modulate() + 1e-8)
-        hidden_states = self.stb(hidden_states, sigma_log)
+
+        if not self.enable_sbs or torch.rand(1).item() < self.sbs_p:
+            hidden_states = self.stb(hidden_states, sigma_log)
 
         normed = self._apply_norm(hidden_states, "input")
 
@@ -288,6 +296,8 @@ def create_s3_layer_from_hf(
     nmf_T: float = 1.0,
     nmf_N: int = 4,
     stb_beta: float = 0.5,
+    enable_sbs: bool = True,
+    sbs_p: float = 0.3,
 ) -> S3TransformerLayer:
     """Create an S³ layer from a HuggingFace transformer block."""
     return S3TransformerLayer(

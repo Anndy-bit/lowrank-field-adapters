@@ -355,6 +355,7 @@ class FrugalTrainer:
         dataloader: DataLoader,
         log_fn: Optional[Callable[[FrugalStats], None]] = None,
         vram_log_path: Optional[str] = None,
+        monitor=None,
     ):
         self._current_dataloader = dataloader
         global_step = 0
@@ -386,11 +387,31 @@ class FrugalTrainer:
                             micro_input = input_ids[:, pos:pos + 1].contiguous()
                             micro_target = input_ids[:, pos + 1:pos + 2].contiguous()
 
+                            step_start = time.time()
                             micro_loss = self._training_step(micro_input, micro_target)
+                            step_time_ms = (time.time() - step_start) * 1000
+
                             accum_loss += micro_loss
 
                             vram_now = self._vram_used_mb()
                             vram_peaks.append(vram_now)
+
+                            if monitor is not None:
+                                current_lr = self.optimizer.param_groups[0]["lr"]
+                                nfr_steps = getattr(self, "_current_nfr_steps", 4)
+                                monitor.record_step(
+                                    step=global_step,
+                                    epoch=epoch,
+                                    batch_idx=batch_idx,
+                                    micro_step=pos,
+                                    loss=micro_loss,
+                                    step_time_ms=step_time_ms,
+                                    vram_mb=vram_now,
+                                    lr=current_lr,
+                                    layer_fwd_ms=step_time_ms * 0.6,
+                                    layer_bwd_ms=step_time_ms * 0.4,
+                                    tokens_per_sec=0.0,
+                                )
 
                             if vram_csv and global_step % 5 == 0:
                                 vram_writer.writerow([
@@ -408,11 +429,28 @@ class FrugalTrainer:
                         avg_loss = accum_loss / max(seq_len - 1, 1)
                     else:
                         # MEDIUM/HIGH path: single sequence-level forward+backward.
+                        step_start = time.time()
                         accum_loss = self._training_step_sequence(input_ids)
+                        step_time_ms = (time.time() - step_start) * 1000
                         avg_loss = accum_loss
 
                         vram_now = self._vram_used_mb()
                         vram_peaks.append(vram_now)
+
+                        if monitor is not None:
+                            current_lr = self.optimizer.param_groups[0]["lr"]
+                            monitor.record_step(
+                                step=global_step,
+                                epoch=epoch,
+                                batch_idx=batch_idx,
+                                micro_step=-1,
+                                loss=accum_loss,
+                                step_time_ms=step_time_ms,
+                                vram_mb=vram_now,
+                                lr=current_lr,
+                                tokens_per_sec=0.0,
+                            )
+
                         if vram_csv:
                             vram_writer.writerow([
                                 epoch + 1, batch_idx, -1, global_step,

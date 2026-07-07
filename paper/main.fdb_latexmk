@@ -1,7 +1,7 @@
 # Fdb version 4
-["pdflatex"] 1783458075.64636 "/home/gula/Documentos/Proyectos Github/lowrank-field-adapters/paper/main.tex" "main.pdf" "main" 1783458077.10534 0
+["pdflatex"] 1783461638.61949 "/home/gula/Documentos/Proyectos Github/lowrank-field-adapters/paper/main.tex" "main.pdf" "main" 1783461639.75106 0
   "/etc/texmf/web2c/texmf.cnf" 1783300239.92776 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/gula/Documentos/Proyectos Github/lowrank-field-adapters/paper/main.tex" 1783458075.31422 76406 a5eb0fdec6f700477f1fca77e2e840b3 ""
+  "/home/gula/Documentos/Proyectos Github/lowrank-field-adapters/paper/main.tex" 1783461480.65486 78758 da6530f02a6b3083cdf5fb562853c8de ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/adobe/courier/pcrr8r.tfm" 1136768653 1292 bd42be2f344128bff6d35d98474adfe3 ""
@@ -150,9 +150,9 @@
   "/usr/share/texmf/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1783300272.55269 5472669 54eaf61a88b6b7896ebd0dac973cb29c ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1783300397 8213826 88427b366174eb413e9bdd3ff0791543 ""
-  "main.aux" 1783458076.92022 13947 f261f56fa3caa215c1247a98d78d6195 "pdflatex"
-  "main.out" 1783458076.92222 9593 6810c6768c0af93d13e6f5c56ae44020 "pdflatex"
-  "main.tex" 1783458075.31422 76406 a5eb0fdec6f700477f1fca77e2e840b3 ""
+  "main.aux" 1783461639.6289 14731 b42eeff7ada38581cb63d96ab595ebf0 "pdflatex"
+  "main.out" 1783461639.6299 9592 ad450b8b52ab8eccdffc9475a516a056 "pdflatex"
+  "main.tex" 1783461480.65486 78758 da6530f02a6b3083cdf5fb562853c8de ""
   (generated)
   "main.aux"
   "main.log"

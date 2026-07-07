@@ -97,6 +97,11 @@ class NMFFlow(nn.Module):
         return h + dt * self.field(h, t)
 
     def forward(self, h: torch.Tensor) -> torch.Tensor:
+        orig_shape = h.shape
+        is_3d = len(orig_shape) == 3
+        if is_3d:
+            h = h.reshape(-1, orig_shape[-1])
+
         if self.solver == "rk4":
             step_fn = self._rk4_step
         elif self.solver == "euler":
@@ -109,6 +114,9 @@ class NMFFlow(nn.Module):
         for _ in range(self.N_steps):
             h_current = step_fn(h_current, t_current, self.dt)
             t_current += self.dt
+
+        if is_3d:
+            h_current = h_current.reshape(orig_shape)
         return h_current
 
     def deformation(self, h: torch.Tensor) -> torch.Tensor:

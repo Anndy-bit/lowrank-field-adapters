@@ -11,8 +11,12 @@ Usage:
 import torch
 import argparse
 import os
+import sys
 import json
 import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from typing import Dict, Tuple
 from tqdm import tqdm
 
@@ -234,13 +238,14 @@ def main():
     args = parser.parse_args()
 
     print(f"[SVD] Loading model: {args.model}")
-    from transformers import AutoModelForCausalLM
-
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model,
+    from utils.resilient_download import load_model_with_resume
+    model, _, _ = load_model_with_resume(
+        repo_id=args.model,
+        device="cpu",
         torch_dtype=torch.float16,
-        device_map="cpu",
-        low_cpu_mem_usage=True,
+        timeout=120,
+        max_retries=10,
+        retry_delay=5.0,
     )
 
     print(f"[SVD] Extracting weights...")

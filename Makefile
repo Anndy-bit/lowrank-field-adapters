@@ -67,6 +67,13 @@ train: _ensure_venv
 		--config $(CONFIG) \
 		--device $(DEVICE)
 
+train-monitored: _ensure_venv
+	@echo "[Train+Monitor] Starting frugal training with FULL system monitoring..."
+	@echo "[Monitor] Logs: results/monitoring/"
+	$(PYTHON) train_s3.py \
+		--config $(CONFIG) \
+		--device $(DEVICE)
+
 ABLATION ?= s3_full
 train-ablation: _ensure_venv
 	@echo "[Train] Ablation: $(ABLATION)..."
