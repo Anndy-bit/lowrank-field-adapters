@@ -1,0 +1,25 @@
+# S³: Spectral-Spatial-Smooth Fine-Tuning
+# Requirements for GTX 1050 (2GB VRAM, CC 6.1)
+# PyTorch pinned to version with sm_61 support
+
+# Core (pinned for GTX 1050 compatibility)
+torch==2.5.1   # CUDA 12.1, supports sm_61 (GTX 1050)
+transformers>=4.38.0
+datasets>=2.16.0
+accelerate>=0.28.0
+
+# Configuration & utilities
+pyyaml>=6.0
+tqdm>=4.66.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Evaluation (optional for benchmarks)
+lm-eval>=0.4.0
+evaluate>=0.4.0
+fschat>=0.2.36  # for AlpacaEval judge
+
+# Development & testing
+pytest>=7.0
+black>=23.0
+ruff>=0.3.0

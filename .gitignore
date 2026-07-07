@@ -1,0 +1,35 @@
+# S³ project
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Models & checkpoints (large files)
+checkpoints/
+svd_factors/
+*.pt
+*.bin
+*.safetensors
+
+# Results
+results/
+*.csv
+
+# Environment
+.env
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Paper artifacts
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.pdf
+paper/*.bbl
+paper/*.blg

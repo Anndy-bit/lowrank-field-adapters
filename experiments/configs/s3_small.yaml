@@ -1,0 +1,46 @@
+# S³ Small Configuration (ultra-frugal)
+# Target: GTX 1050 (2GB VRAM), minimal VRAM footprint
+# Use for ablation: how low can we go?
+
+experiment:
+  name: s3_small
+  description: "S³ minimal configuration for ablation study"
+  seed: 42
+
+model:
+  name: Qwen/Qwen2.5-7B-Instruct
+  dtype: fp16
+  max_seq_length: 512
+
+s3:
+  svmo_k: 64
+  svmo_hidden: 16
+  svmo_alpha: 0.2
+  nmf_bottleneck: 4
+  nmf_T: 0.5
+  nmf_N: 2
+  nmf_solver: rk4
+  stb_head_dim: 16
+  stb_beta: 0.3
+
+training:
+  micro_batch_size: 1
+  gradient_accumulation_steps: 128
+  learning_rate: 1.0e-3
+  weight_decay: 0.01
+  max_epochs: 3
+  warmup_ratio: 0.05
+  max_grad_norm: 1.0
+  use_amp: true
+  amp_dtype: fp16
+
+data:
+  dataset: alpaca
+  path: tatsu-lab/alpaca
+  split: train
+
+benchmarks: [mmlu, hellaswag, arc, gsm8k]
+
+output:
+  checkpoint_dir: ./checkpoints/s3_small/
+  results_dir: ./results/s3_small/

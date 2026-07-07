@@ -1,0 +1,65 @@
+# Ablation study configurations for S³ components
+
+ablations:
+
+  s3_full:
+    desc: "Full S³ (SVMO + STB + NMF)"
+    svmo: true
+    stb: true
+    nmf: true
+    seed: 42
+
+  s3_no_stb:
+    desc: "SVMO + NMF only (no spectral bridge)"
+    svmo: true
+    stb: false
+    nmf: true
+    seed: 42
+
+  s3_no_nmf:
+    desc: "SVMO + STB only (no manifold flow)"
+    svmo: true
+    stb: true
+    nmf: false
+    seed: 42
+
+  s3_no_svmo:
+    desc: "NMF + STB only (no spectral modulation)"
+    svmo: false
+    stb: true
+    nmf: true
+    seed: 42
+
+  svmo_only:
+    desc: "SVMO alone"
+    svmo: true
+    stb: false
+    nmf: false
+    seed: 42
+
+  nmf_only:
+    desc: "NMF alone"
+    svmo: false
+    stb: false
+    nmf: true
+    seed: 42
+
+  stb_only:
+    desc: "STB alone (spectral preconditioning with no other adapters)"
+    svmo: false
+    stb: true
+    nmf: false
+    seed: 42
+
+common:
+  model: Qwen/Qwen2.5-7B-Instruct
+  dataset: tatsu-lab/alpaca
+  svmo_k: 128
+  svmo_hidden: 32
+  svmo_alpha: 0.3
+  nmf_bottleneck: 8
+  nmf_T: 1.0
+  nmf_N: 4
+  stb_beta: 0.5
+  max_epochs: 3
+  seeds: [42, 43, 44]

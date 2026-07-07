@@ -1,0 +1,46 @@
+# S³ Large Configuration (maximum quality)
+# Target: GTX 1050 Ti (4GB) or larger GPU
+# For exploring upper bound of S³ quality
+
+experiment:
+  name: s3_large
+  description: "S³ maximum capacity configuration"
+  seed: 42
+
+model:
+  name: Qwen/Qwen2.5-7B-Instruct
+  dtype: fp16
+  max_seq_length: 512
+
+s3:
+  svmo_k: 256
+  svmo_hidden: 64
+  svmo_alpha: 0.5
+  nmf_bottleneck: 16
+  nmf_T: 2.0
+  nmf_N: 8
+  nmf_solver: rk4
+  stb_head_dim: 64
+  stb_beta: 0.7
+
+training:
+  micro_batch_size: 1
+  gradient_accumulation_steps: 128
+  learning_rate: 5.0e-4
+  weight_decay: 0.01
+  max_epochs: 3
+  warmup_ratio: 0.05
+  max_grad_norm: 1.0
+  use_amp: true
+  amp_dtype: fp16
+
+data:
+  dataset: alpaca
+  path: tatsu-lab/alpaca
+  split: train
+
+benchmarks: [mmlu, hellaswag, arc, gsm8k]
+
+output:
+  checkpoint_dir: ./checkpoints/s3_large/
+  results_dir: ./results/s3_large/
