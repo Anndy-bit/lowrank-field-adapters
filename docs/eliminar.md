@@ -1,5 +1,7 @@
-Para arrancar experimentos reales ahora:
-make venv    # ya está
-make svd     # pre-computa SVD (~2 min CPU)
-make train   # entrena S³ en la GTX 1050
-make evaluate # benchmarks
+Resumen de scripts:
+Comando	Qué hace
+make venv	Solo primera vez - instala dependencias
+make svd	Descarga modelo + calcula SVD factors (tolerante a cortes)
+make train	Entrena + monitoring + benchmarks (USA esto)
+make evaluate	Solo corre benchmarks sobre checkpoint existente
+make test	Tests unitarios

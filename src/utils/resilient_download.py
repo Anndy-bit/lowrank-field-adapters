@@ -1,17 +1,17 @@
-"""Resilient model download utilities with resume support.
+"""Resilient model download using HuggingFace's file-by-file download.
 
-Handles HuggingFace model downloads that can be interrupted
-(1-minute internet drops, power outages, etc.).
+Uses sequential file download (not parallel) for slow/unstable connections:
+    - Downloads one file at a time
+    - Each file resumes on interruption
+    - Cleans up incomplete files before starting
+    - Handles connection errors with retry
 """
 
 import os
 import time
-import hashlib
 import requests
-import threading
-import torch
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional, Tuple, List
 
 
 HF_TOKEN = os.environ.get("HF_TOKEN", None)
@@ -21,279 +21,184 @@ if HF_TOKEN:
     HEADERS["authorization"] = f"Bearer {HF_TOKEN}"
 
 
-def _get_hf_file_url(repo_id: str, filename: str) -> str:
-    return f"{HF_ENDPOINT}/api/models/{repo_id}/resolve/main/{filename}"
+def _clean_incomplete_files(model_cache: Path) -> int:
+    """Remove .incomplete files from interrupted downloads."""
+    cleaned = 0
+    if model_cache.exists():
+        incomplete_files = list(model_cache.rglob("*.incomplete"))
+        for f in incomplete_files:
+            try:
+                f.unlink()
+                cleaned += 1
+            except Exception:
+                pass
+    return cleaned
 
 
-def _get_local_file_path(repo_id: str, filename: str, cache_dir: Optional[str] = None) -> Path:
-    if cache_dir is None:
-        cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
-    return Path(cache_dir) / f"models--{repo_id.replace('/', '--')}" / "blobs" / filename
-
-
-def _get_tmp_path(local_path: Path) -> Path:
-    return local_path.with_suffix(".tmp_download")
-
-
-def _get_etag_from_server(url: str, timeout: int = 30) -> Optional[str]:
-    resp = requests.head(url, headers=HEADERS, timeout=timeout, allow_redirects=True)
-    if resp.status_code == 200:
-        return resp.headers.get("etag", "").strip('"')
-    return None
-
-
-def hf_download_file(
+def download_model_resilient(
     repo_id: str,
-    filename: str,
-    cache_dir: Optional[str] = None,
-    resume: bool = True,
-    timeout: int = 120,
-    max_retries: int = 10,
-    retry_delay: float = 5.0,
-    chunk_size: int = 10 * 1024 * 1024,
-) -> Tuple[str, bool]:
-    """Download a single file from HuggingFace Hub with resume support.
-
-    Downloads start 10MB before the last downloaded byte, so connection
-    drops lose at most ~10MB of download.
-
-    Args:
-        repo_id: HuggingFace model repo (e.g. 'Qwen/Qwen2.5-7B')
-        filename: Name of file to download
-        cache_dir: HuggingFace cache directory
-        resume: If True, continue from where download left off
-        timeout: Seconds per request attempt
-        max_retries: Max retry attempts per file
-        retry_delay: Seconds to wait before retry after failure
-        chunk_size: Bytes to redownload before interruption (~10MB)
-
-    Returns:
-        (local_path_str, downloaded_fresh): Path to downloaded file and
-        whether it was freshly downloaded (True) or from cache (False)
-    """
-    url = _get_hf_file_url(repo_id, filename)
-    local_path = _get_local_file_path(repo_id, filename, cache_dir)
-    tmp_path = _get_tmp_path(local_path)
-    downloaded_fresh = False
-
-    local_path.parent.mkdir(parents=True, exist_ok=True)
-
-    existing_size = 0
-    if local_path.exists():
-        local_path.chmod(0o644)
-        return (str(local_path), False)
-
-    if resume and tmp_path.exists():
-        existing_size = tmp_path.stat().st_size
-        print(f"  Resuming {filename}: {existing_size / (1024*1024):.1f}MB already downloaded")
-
-    headers = dict(HEADERS)
-    start_byte = max(0, existing_size - chunk_size)
-
-    for attempt in range(max_retries):
-        try:
-            if start_byte > 0:
-                headers["Range"] = f"bytes={start_byte}-"
-
-            resp = requests.get(url, headers=headers, timeout=timeout, stream=True)
-            resp.raise_for_status()
-
-            mode = "ab" if (start_byte > 0 and resume) else "wb"
-            bytes_to_skip = 0
-
-            if start_byte > 0 and resp.status_code in (200, 206):
-                if resp.status_code == 206:
-                    content_range = resp.headers.get("content-range", "")
-                    if "/" in content_range:
-                        total_size = content_range.split("/")[-1]
-                        if total_size not in ("*", ""):
-                            total_size = int(total_size)
-                            if start_byte >= total_size:
-                                print(f"  {filename} already complete, renaming")
-                                tmp_path.rename(local_path)
-                                return (str(local_path), False)
-                bytes_to_skip = existing_size - start_byte
-
-            with open(tmp_path, mode) as f:
-                if bytes_to_skip > 0:
-                    resp.raw.read(bytes_to_skip)
-                for chunk in resp.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-
-            tmp_path.rename(local_path)
-            downloaded_fresh = True
-            print(f"  {filename}: download complete ({local_path.stat().st_size / (1024*1024):.1f}MB)")
-            return (str(local_path), True)
-
-        except requests.exceptions.Timeout:
-            print(f"  [{attempt+1}/{max_retries}] Timeout downloading {filename}, retrying in {retry_delay}s...")
-        except requests.exceptions.ConnectionError as e:
-            print(f"  [{attempt+1}/{max_retries}] Connection error for {filename}: {e}, retrying in {retry_delay}s...")
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 416:
-                tmp_path.rename(local_path)
-                return (str(local_path), True)
-            print(f"  [{attempt+1}/{max_retries}] HTTP error for {filename}: {e}, retrying...")
-        except (IOError, OSError) as e:
-            print(f"  [{attempt+1}/{max_retries}] IO error for {filename}: {e}, retrying...")
-
-        if attempt < max_retries - 1:
-            time.sleep(retry_delay)
-
-    raise RuntimeError(f"Failed to download {filename} after {max_retries} attempts")
-
-
-def hf_download_model(
-    repo_id: str,
-    filenames: Optional[List[str]] = None,
-    cache_dir: Optional[str] = None,
-    timeout: int = 120,
-    max_retries: int = 10,
-    retry_delay: float = 5.0,
-    progress_callback=None,
+    timeout: int = 300,
+    max_retries: int = 20,
+    retry_delay: float = 10.0,
+    force: bool = False,
 ) -> str:
-    """Download all (or specific) files of a HuggingFace model with resume support.
+    """Download a HuggingFace model file-by-file for unstable connections.
+
+    Uses HF's hf_hub_download which:
+    - Downloads one file at a time (stable for slow internet)
+    - Automatically resumes interrupted files
+    - Uses cache for already-downloaded files
 
     Args:
         repo_id: HuggingFace model repo
-        filenames: Specific files to download (None = discover from API)
-        cache_dir: Cache directory
-        timeout: Seconds per request
-        max_retries: Max retries per file
-        retry_delay: Delay between retries
-        progress_callback: Called with (downloaded_count, total_count, filename)
+        timeout: Seconds per request (increased for slow connections)
+        max_retries: Max retry attempts per file
+        retry_delay: Seconds between retries
+        force: Force re-download
 
     Returns:
         Local model directory path
-
-    Raises:
-        RuntimeError: If download fails after all retries
     """
-    if filenames is None:
-        import requests as req
+    from huggingface_hub import HfApi, hf_hub_download
 
-        api_url = f"{HF_ENDPOINT}/api/models/{repo_id}"
-        resp = req.get(api_url, headers=HEADERS, timeout=timeout)
-        resp.raise_for_status()
-        meta = resp.json()
-        filenames = [f["rfilename"] for f in meta.get("siblings", [])]
-        if not filenames:
-            print(f"  Could not discover files from API, trying safetensors checkpoint...")
-            filenames = ["model.safetensors", "pytorch_model.bin", "model.bin"]
-
-    print(f"Downloading model: {repo_id} ({len(filenames)} files)")
-    if cache_dir is None:
-        cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
-    model_dir = Path(cache_dir) / f"models--{repo_id.replace('/', '--')}"
-    model_dir.mkdir(parents=True, exist_ok=True)
-
-    for i, fname in enumerate(filenames):
-        try:
-            _, fresh = hf_download_file(
-                repo_id, fname, cache_dir=cache_dir,
-                resume=True, timeout=timeout, max_retries=max_retries,
-                retry_delay=retry_delay
-            )
-            if progress_callback:
-                progress_callback(i + 1, len(filenames), fname)
-        except RuntimeError:
-            raise
-
-    return str(model_dir)
-
-
-def check_model_cached(repo_id: str, filenames: List[str], cache_dir: Optional[str] = None) -> bool:
-    """Check if all model files are present in cache."""
-    if cache_dir is None:
-        cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
-    return all(
-        _get_local_file_path(repo_id, f, cache_dir).exists()
-        for f in filenames
-    )
-
-
-def _mock_model_download(repo_id: str, shapes: dict) -> str:
-    import tempfile, json
     cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
-    model_dir = Path(cache_dir) / f"models--{repo_id.replace('/', '--')}"
-    config = {
-        "model_type": "custom",
-        "architectures": ["S3ForCausalLM"],
-        "torch_dtype": "float16",
-    }
-    (model_dir / "configs.json").write_text(json.dumps(config, indent=2))
-    meta = {
-        "format": "gguf", "parameter_count": sum(v[0]*v[1] for v in shapes.values()),
-        "quantization": "f16"
-    }
-    for name, (rows, cols) in shapes.items():
-        safetensors_file = model_dir / "blobs" / f"{name}.safetensors"
-        safetensors_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(safetensors_file, "wb") as f:
-            import struct
-            header = struct.pack("QQ", rows, cols)
-            f.write(header)
-    return str(model_dir)
+    model_cache = Path(cache_dir) / f"models--{repo_id.replace('/', '--')}"
+
+    # Clean incomplete files from previous interrupted downloads
+    cleaned = _clean_incomplete_files(model_cache)
+    if cleaned > 0:
+        print(f"  Cleaned {cleaned} incomplete file(s) from previous run")
+
+    print(f"  Downloading model: {repo_id}")
+    print(f"  (sequential download for unstable connections, do NOT cancel)")
+
+    try:
+        api = HfApi()
+        repo_files = api.list_repo_files(repo_id, token=HF_TOKEN)
+        print(f"  Found {len(repo_files)} files to download")
+    except Exception as e:
+        print(f"  Error listing repo files: {e}")
+        raise RuntimeError(f"Cannot access repo {repo_id}: {e}")
+
+    for i, filename in enumerate(repo_files, 1):
+        print(f"  [{i}/{len(repo_files)}] {filename}...", end=" ", flush=True)
+        
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                hf_hub_download(
+                    repo_id=repo_id,
+                    filename=filename,
+                    cache_dir=cache_dir,
+                    token=HF_TOKEN,
+                    force_download=force,
+                )
+                print("OK")
+                break
+                
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                last_error = e
+                print(f"connection error, retrying ({attempt+1}/{max_retries})...")
+                time.sleep(retry_delay)
+                
+            except Exception as e:
+                last_error = e
+                err_str = str(e).lower()
+                if "404" in err_str or "not found" in err_str:
+                    print(f"NOT FOUND (skipping)")
+                    break
+                print(f"error: {e}, retrying ({attempt+1}/{max_retries})...")
+                time.sleep(retry_delay)
+        else:
+            print(f"FAILED after {max_retries} attempts")
+            raise RuntimeError(f"Failed to download {filename} after {max_retries} attempts: {last_error}")
+
+    print(f"  Download complete: {model_cache}")
+    return str(model_cache)
 
 
 def load_model_with_resume(
     repo_id: str,
     device: str = "cpu",
-    torch_dtype=torch.float16,
-    timeout: int = 120,
-    max_retries: int = 10,
-    retry_delay: float = 5.0,
-    filenames: Optional[List[str]] = None,
+    torch_dtype=None,
+    timeout: int = 300,
+    max_retries: int = 20,
+    retry_delay: float = 10.0,
 ) -> Tuple:
     """Load a HuggingFace model with resilient, resumable downloads.
 
-    Downloads are resumable - if the internet drops for ~1 minute,
-    the download continues from ~10MB before the interruption point.
-
     Args:
-        repo_id: HuggingFace model repo id
+        repo_id: HuggingFace model repo
         device: Device to load model on
         torch_dtype: Model dtype
         timeout: Seconds per request
         max_retries: Max retries per file
         retry_delay: Delay between retries
-        filenames: Specific files (auto-discovered if None)
 
     Returns:
         (model, tokenizer, model_dir)
     """
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
-    model_dir = Path(cache_dir) / f"models--{repo_id.replace('/', '--')}"
-
-    if filenames is None:
-        api_url = f"{HF_ENDPOINT}/api/models/{repo_id}"
-        resp = requests.get(api_url, headers=HEADERS, timeout=timeout)
-        if resp.status_code == 200:
-            meta = resp.json()
-            filenames = [f["rfilename"] for f in meta.get("siblings", [])]
-        if not filenames:
-            filenames = ["model.safetensors", "config.json"]
-
-    all_cached = check_model_cached(repo_id, filenames, cache_dir)
-
-    if not all_cached:
-        print(f"Model files not fully cached for {repo_id}, downloading with resume support...")
-        model_dir_str = hf_download_model(
-            repo_id, filenames, cache_dir=cache_dir,
-            timeout=timeout, max_retries=max_retries,
-            retry_delay=retry_delay,
-        )
-        model_dir = Path(model_dir_str)
-
-    print(f"Loading model from: {model_dir}")
-    tokenizer = AutoTokenizer.from_pretrained(str(model_dir), trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        str(model_dir),
-        torch_dtype=torch_dtype,
-        device_map=device,
-        trust_remote_code=True,
+    model_dir = download_model_resilient(
+        repo_id,
+        timeout=timeout,
+        max_retries=max_retries,
+        retry_delay=retry_delay,
     )
-    return model, tokenizer, str(model_dir)
+
+    print(f"  Loading tokenizer from: {model_dir}")
+    tokenizer = None
+    tokenizer_error = None
+    for attempt in range(max_retries):
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(model_dir, trust_remote_code=True)
+            break
+        except Exception as e:
+            tokenizer_error = e
+            err_str = str(e).lower()
+            if "tokenizer" in err_str or "sentencepiece" in err_str or "tiktoken" in err_str:
+                print(f"  [{attempt+1}/{max_retries}] Tokenizer error (may be incomplete): {e}")
+                print(f"  Re-downloading model to fix corrupted files...")
+                try:
+                    model_dir = download_model_resilient(
+                        repo_id,
+                        timeout=timeout,
+                        max_retries=max_retries,
+                        retry_delay=retry_delay,
+                        force=True,
+                    )
+                    print(f"  Retrying tokenizer load from: {model_dir}")
+                except Exception as dl_err:
+                    print(f"  Re-download failed: {dl_err}, retrying original cache...")
+                    time.sleep(retry_delay)
+            else:
+                print(f"  [{attempt+1}/{max_retries}] Error loading tokenizer: {e}, retrying in {retry_delay}s...")
+                time.sleep(retry_delay)
+
+    if tokenizer is None:
+        raise RuntimeError(f"Failed to load tokenizer after {max_retries} attempts: {tokenizer_error}")
+
+    print(f"  Loading model from: {model_dir}")
+    model = None
+    model_error = None
+    for attempt in range(max_retries):
+        try:
+            model = AutoModelForCausalLM.from_pretrained(
+                model_dir,
+                torch_dtype=torch_dtype,
+                device_map=device,
+                trust_remote_code=True,
+            )
+            break
+        except Exception as e:
+            model_error = e
+            print(f"  [{attempt+1}/{max_retries}] Error loading model: {e}")
+            if attempt < max_retries - 1:
+                print(f"  Retrying in {retry_delay}s...")
+                time.sleep(retry_delay)
+
+    if model is None:
+        raise RuntimeError(f"Failed to load model after {max_retries} attempts: {model_error}")
+
+    return model, tokenizer, model_dir

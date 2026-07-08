@@ -238,7 +238,7 @@ def main():
     args = parser.parse_args()
 
     print(f"[SVD] Loading model: {args.model}")
-    from utils.resilient_download import load_model_with_resume
+    from src.utils.resilient_download import load_model_with_resume
     model, _, _ = load_model_with_resume(
         repo_id=args.model,
         device="cpu",
