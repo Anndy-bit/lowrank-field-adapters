@@ -410,7 +410,7 @@ class FrugalTrainer:
                                     lr=current_lr,
                                     layer_fwd_ms=step_time_ms * 0.6,
                                     layer_bwd_ms=step_time_ms * 0.4,
-                                    tokens_per_sec=0.0,
+                                    seq_len=seq_len,
                                 )
 
                             if vram_csv and global_step % 5 == 0:
@@ -448,7 +448,7 @@ class FrugalTrainer:
                                 step_time_ms=step_time_ms,
                                 vram_mb=vram_now,
                                 lr=current_lr,
-                                tokens_per_sec=0.0,
+                                seq_len=seq_len,
                             )
 
                         if vram_csv:
