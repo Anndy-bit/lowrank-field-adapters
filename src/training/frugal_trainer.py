@@ -22,6 +22,9 @@ import time
 import gc
 import math
 
+from src.training.s3_opt import S3OPTOptimizer
+from src.training.s3_optimizations import SGCGradientHook, NFRController, SBSController
+
 
 @dataclass
 class FrugalConfig:
@@ -43,6 +46,22 @@ class FrugalConfig:
     layer_swap: bool = True
     token_by_token: bool = True
     vram_budget_mb: int = 2048
+    # S3-OPT optimization flags (all disabled by default for backwards compat)
+    use_smv: bool = False          # SMV: delta-modulation vector transfer
+    use_emp: bool = False          # EMP: predictor-based μ skip
+    use_ter: bool = False          # TER: entropy-based ODE routing
+    use_fdgd: bool = False         # FDGD: Fourier gradient denoising
+    use_gns: bool = False         # GNS: gradient-normalized backward skip
+    use_sma: bool = False         # SMA: spectral checkpoint compression
+    use_tows: bool = False        # TOWS: token-wise ODE warmstarting
+    use_dra: bool = False         # DRA: dynamic rank adaptation
+    use_mso: bool = False         # MSO: manifold shortcut detection
+    use_hfisc: bool = False       # HFISC: optimal initialization
+    # S3 already-implemented optimizations
+    use_sgc: bool = True          # SGC: spectral gradient compression
+    use_nfr: bool = True          # NFR: NMF flow recycling
+    use_sbs: bool = True          # SBS: STB bypass sampling
+    sbs_p_stb: float = 0.3         # STB bypass probability
 
 
 @dataclass
@@ -115,6 +134,29 @@ class FrugalTrainer:
             self._move_all_layer_weights_to_gpu()
 
         self.stats = FrugalStats()
+
+        self.s3_opt = S3OPTOptimizer(
+            enabled=any([
+                config.use_smv, config.use_emp, config.use_ter,
+                config.use_fdgd, config.use_gns, config.use_sma,
+                config.use_tows, config.use_dra, config.use_mso, config.use_hfisc,
+            ]),
+            smv=config.use_smv,
+            emp=config.use_emp,
+            ter=config.use_ter,
+            fdgd=config.use_fdgd,
+            gns=config.use_gns,
+            sma=config.use_sma,
+            tows=config.use_tows,
+            dra=config.use_dra,
+            mso=config.use_mso,
+            hfisc=config.use_hfisc,
+        )
+
+        self.sgc = SGCGradientHook if config.use_sgc else None
+        self.nfr = NFRController() if config.use_nfr else None
+        self.sbs_enabled = config.use_sbs
+        self.sbs_p_stb = config.sbs_p_stb if config.use_sbs else 0.0
 
     def _check_vram_budget(self):
         """Warn (do not abort) if the device has less VRAM than the profile
@@ -221,9 +263,20 @@ class FrugalTrainer:
         layer = self.layers[layer_idx]
         self._move_layer_weights_to_gpu(layer_idx)
 
+        if self.s3_opt.cfg.tows and hasattr(self, '_tows_h_prev'):
+            hidden_states = self.s3_opt.tows.warmstart_forward(
+                hidden_states, self._tows_h_prev, layer_idx
+            )
+
         with torch.cuda.amp.autocast(enabled=self._amp_enabled, dtype=self.config.amp_dtype):
             outputs = layer(hidden_states)
             hidden_states = outputs[0]
+
+        if self.s3_opt.cfg.sma:
+            layer.sma_compressed = self.s3_opt.sma.compress(hidden_states)
+
+        if self.s3_opt.cfg.tows:
+            self._tows_h_prev = hidden_states.detach().clone()
 
         self._move_layer_weights_to_cpu(layer_idx)
         return hidden_states
@@ -296,6 +349,16 @@ class FrugalTrainer:
         del logits, loss
 
         for layer_idx in reversed(range(self.n_layers)):
+            # FDGD: filter gradient in frequency domain
+            if self.s3_opt.cfg.fdgd:
+                grad_current = self.s3_opt.fdgd.filter(grad_current)
+
+            # GNS: skip backward if gradient norm too small
+            if self.s3_opt.cfg.gns:
+                grad_norm = grad_current.norm().item()
+                if self.s3_opt.gns.should_skip(grad_norm, f"layer_{layer_idx}"):
+                    continue
+
             cp = checkpoints[layer_idx]
             hs = cp.to_device(self._gpu_device).hidden_states
             self._backward_layer(layer_idx, hs.requires_grad_(True), grad_current)
