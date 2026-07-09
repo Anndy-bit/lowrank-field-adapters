@@ -149,3 +149,61 @@ lowrank-field-adapters/
 **Autores**: Anndy-bit
 **Fecha de inicio**: Julio 2026  
 **Proyecto**: S³ — Spectral-Spatial-Smooth Fine-Tuning para VRAM limitada
+
+---
+
+## Uso Rápido
+
+### Linux (con Makefile)
+
+```bash
+# Ver ayuda
+make help
+
+# Crear entorno virtual
+make venv
+
+# Ejecutar SVD (CPU por defecto, para GPU usa DEVICE=cuda:0)
+make svd MODEL=Qwen/Qwen2.5-7B-Instruct K=128
+
+# Entrenar
+make train DEVICE=cuda:0
+
+# Entrenar con monitor
+make train-monitored DEVICE=cuda:0
+
+# Pipeline completo
+make all
+```
+
+### Windows (con bat_s3.bat)
+
+```cmd
+REM Ver ayuda
+bat_s3.bat help
+
+REM Crear entorno virtual
+bat_s3.bat venv
+
+REM Ejecutar SVD (usa tu GPU con --device cuda:0)
+bat_s3.bat svd MODEL=Qwen/Qwen2.5-7B-Instruct K=128
+
+REM Entrenar
+bat_s3.bat train DEVICE=cuda:0
+
+REM Entrenar con monitor
+bat_s3.bat train-monitored DEVICE=cuda:0
+
+REM Pipeline completo
+bat_s3.bat all
+```
+
+### Variables personalizables
+
+| Variable | Descripción | Valor por defecto |
+|----------|-------------|-------------------|
+| `MODEL` | Modelo de HuggingFace | `Qwen/Qwen2.5-7B-Instruct` |
+| `K` | Rank SVD | `128` |
+| `DEVICE` | Dispositivo (cpu/cuda:0) | `cuda:0` |
+| `CONFIG` | Archivo YAML de config | `experiments/configs/s3_standard.yaml` |
+| `ABLATION` | Estudio de ablación | `s3_full` |

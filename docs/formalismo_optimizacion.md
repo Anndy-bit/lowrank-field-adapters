@@ -17,7 +17,7 @@ Este documento formaliza seis nuevas optimizaciones teóricas denominadas colect
 3. **TER** — Routing adaptativo del número de pasos ODE por entropía del token
 4. **MSO** — Atajos geodésicos en el manifold de representaciones
 5. **FDGD** — Filtrado en dominio Fourier de gradientes para convergencia acelerada
-6. **IBP** — Poda de backward pass via teoría de Information Bottleneck
+6. **GNS** — Poda de backward pass via magnitud de gradiente normalizado
 
 Adicionalmente, se introducen cuatro optimizaciones complementarias:
 
@@ -172,7 +172,7 @@ En la implementación SMV, el bandwidth utilizado es $B_{SMV} = 32k$ bits (fp32)
 - Para $\alpha = 0.3, \sigma_{max} = 10, \epsilon = 0.01$: gap $\approx 32 / 12 \approx 2.7$x — SMV usa ~3x más bits que el óptimo teórico.
 
 **Esto sugiere que existe espacio para comprimir $\mu$ usando un código de longitud variable antes de transferir, por ejemplo mediante:**
-- Cuantización no-uniforme óptimacrudada al histograma de $\mu$
+- Cuantización no-uniforme óptima ajustada al histograma de $\mu$
 - Compresiónentrópica (e.g., codificación aritmética) si la distribución de $\mu$ es conocida
 
 ### 2.8 Teorema SMV-5: VRAM Suficiencia
@@ -239,7 +239,7 @@ SMV usa $B_{SMV} = 16k$ bits (fp16). La eficiencia de SMV es $\eta_{SMV} = B_{mi
 ### 2.11 Análisis de Contención PCIe
 
 **Teorema SMV-8 (Latencia bajo Contención).**
-Sea $t_{transfer}(\mu)$ el tiempo de transferir $\mu$ por PCIe en régimen空闲 (sin contención). En un sistema con $N_{proc}$ procesos compitiendo por el bus PCIe, la latencia efectiva es:
+Sea $t_{transfer}(\mu)$ el tiempo de transferir $\mu$ por PCIe en régimen sin contención (idle). En un sistema con $N_{proc}$ procesos compitiendo por el bus PCIe, la latencia efectiva es:
 
 $$\mathbb{E}[t_{transfer}] \approx \frac{t_{transfer}(\mu)}{1 - \rho_{PCIe}} \cdot \frac{1}{1 - p_{contention}}$$
 
@@ -261,7 +261,7 @@ Si el data loading está en un hilo separado con priority inversion prevention (
 Si $d_{out} = 8192$ (modelos grandes), $U_k$ requiere $8192 \cdot 128 \cdot 4\text{ bytes} = 4$MB por capa. Para un modelo de 80 capas (e.g., LLaMA-3 70B): $80 \cdot 4\text{MB} = 320$MB solo para mantener $U_k$ en GPU. Si la VRAM total del dispositivo es 4GB y otros tensores ya ocupan >3.6GB, puede no haber espacio suficiente, forzando a keeping $U_k$ en CPU y haciendo SMV inaplicable.
 
 **Falla 2: Sistemas con memoria unificada (Apple Silicon, Intel iGPU).**
-En arquitecturas donde CPU y GPU comparten memória física (unified memory), el bandwidth PCIe no existe como bottleneck separado. El bandwidth de demócria unificada es típicamente alto (~100-200 GB/s en Apple M3 Max), pero la latência de memory mapping puede ser significativa. En estos sistemas, el speedup de SMV puede no ser medible.
+En arquitecturas donde CPU y GPU comparten memoria física (unified memory), el bandwidth PCIe no existe como bottleneck separado. El bandwidth de memoria unificada es típicamente alto (~100-200 GB/s en Apple M3 Max), pero la latencia de memory mapping puede ser significativa. En estos sistemas, el speedup de SMV puede no ser medible.
 
 **Falla 3: Training con gradient accumulation muy largo.**
 Si el optimizer actualiza $\theta$ solo cada $N_{grad\_accum}$ pasos (common en low-VRAM settings con micro-batches de 1), entonces $\mu_\theta$ permanece constante durante $N_{grad\_accum} \cdot (seq\_len - 1)$ forwards. En este caso, la primera evaluación del MLP $g_\theta$ computa $\mu$, las siguientes $N_{grad\_accum} \cdot (seq\_len - 1) - 1$ forwards son redundantes. SMV no elimina esta redundancia — para eso está EMP.
@@ -1514,7 +1514,7 @@ donde $\sigma_j(W)$ son los valores singulares de la matriz de peso $W$.
 
 $$\frac{\partial\mathcal{L}}{\partial h} = \left(\frac{\partial W}{\partial h}\right)^T \cdot g_y + \ldots$$
 
-Para la skip connection o residual, el gradiente pasa directamente. Para las capas donde se aplica SMA, el gradiente respecto a la entrada es $g_h = W^T g_y$. La компонента que pasa por el subspace $U_k$ es:
+Para la skip connection o residual, el gradiente pasa directamente. Para las capas donde se aplica SMA, el gradiente respecto a la entrada es $g_h = W^T g_y$. La componente que pasa por el subspace $U_k$ es:
 
 $$\|g_h - U_k U_k^T g_h\| = \|U_\perp U_\perp^T g_h\| \leq \|U_\perp\| \cdot \|U_\perp^T g_h\| = \|g_h^{\perp}\|$$
 
@@ -1622,33 +1622,35 @@ HFISC usa la escala óptima para GELU: $\sqrt{2/d}$, que minimiza $\|W_2 W_1 - I
 
 ### 8.3 Token-wise ODE Warmstarting (TOWS)
 
-**Idea restringida:** En los **módulos MLP** (i.e., las capas $W_{up}, W_{gate}, W_{down}$ de NMF), la ODE $dh/dt = f_\theta(h, t)$ opera punto a punto sobre cada token independientemente — no hay atención cruzada. Para tokens consecutivos, las activaciones del MLP tienden a ser similares porque el MLP solo ve el token individual, no el contexto. Usamos $h_{MLP}(T)$ del token $t$ como warmstart para $h_{MLP}(0)$ del token $t+1$.
+**Idea restringida:** En los **módulos MLP** (i.e., las capas $W_{up}, W_{gate}, W_{down}$ de NMF), la ODE $dh/d\tau = f_\theta(h, \tau)$ opera punto a punto sobre cada token independientemente — no hay atención cruzada. Para tokens consecutivos (índice $i$ e $i+1$), las activaciones del MLP tienden a ser similares porque el MLP solo ve el token individual, no el contexto. Usamos $h_{MLP}^{\,i}(T)$ del token $i$ como warmstart para $h_{MLP}^{\,i+1}(0)$ del token $i+1$.
+
+> **Nota de notación:** $\tau \in [0,T]$ es el parámetro de tiempo continuo de la ODE; $i$ es el índice del token en la secuencia. Se evitan las letras $t$ y $s$ para prevenir confusión con ambos significados.
 
 **Nota crítica (PLAN):** Esta técnica NO aplica a las capas de attention. En un transformer, la salida de attention de token $i$ depende de TODOS los tokens $1, \ldots, i$ via el mecanismo de scaled dot-product attention:
 $$h_i^{attn} = \sum_{j=1}^i \text{softmax}\left(\frac{Q_i K_j^T}{\sqrt{d}}\right) V_j h_j$$
 Esto rompe completamente la suposición de Markov — no hay "estado" que se propague de un token al siguiente, porque cada token ve toda la secuencia. TOWS solo tiene sentido para el **MLP module**, donde la ODE sí opera token-by-token sin contexto cruzado.
 
 **Definición 8.3.1 (Módulo MLP local).**
-Sea $h_i^{mlp}(t)$ la representación intermedia del token $i$ después de pasar por la capa MLP en el time step $t$ de la ODE de NMF. EI MLP opera como:
-$$h_i^{mlp}(t) = \text{silu}(W_{gate} \cdot h_i^{ffn}(t)) \odot (W_{up} \cdot h_i^{ffn}(t))$$
-donde $h_i^{ffn}(t)$ es la entrada al bloque FFN del token $i$ en tiempo $t$. Como $W_{gate}, W_{up}$ son independientes del contexto, la continuidad token-a-token aplica.
+Sea $h_i^{mlp}(\tau)$ la representación intermedia del token $i$ después de pasar por la capa MLP en el tiempo $\tau$ de la ODE de NMF. El MLP opera como:
+$$h_i^{mlp}(\tau) = \text{silu}(W_{gate} \cdot h_i^{ffn}(\tau)) \odot (W_{up} \cdot h_i^{ffn}(\tau))$$
+donde $h_i^{ffn}(\tau)$ es la entrada al bloque FFN del token $i$ en tiempo $\tau$. Como $W_{gate}, W_{up}$ son independientes del contexto, la continuidad token-a-token aplica.
 
 **Teorema TOWS-1 (Error de Warmstart para MLP).**
-Sea la ODE del MLP $dh/dt = f_\theta(h, t)$ con solución $h^*(t; h_0)$. Para dos tokens consecutivos $t$ y $t+1$, con estados iniciales $h_0^{(1)}, h_0^{(2)}$ y $\|h_0^{(2)} - h_0^{(1)}\| = \Delta h$. Asumimos $f_\theta$ $L$-Lipschitz en $h$. Denote $h_{warm}(T)$ la solución con warmstart (iniciando desde $h_0^{(1)}$) y $h^*(T; h_0^{(2)})$ la solución correcta. Entonces:
+Sea la ODE del MLP $dh/d\tau = f_\theta(h, \tau)$ con solución $h^*(\tau; h_0)$. Para dos tokens consecutivos $i$ y $i+1$, con estados iniciales $h_0^{(i)}, h_0^{(i+1)}$ y $\|h_0^{(i+1)} - h_0^{(i)}\| = \Delta h$. Asumimos $f_\theta$ $L$-Lipschitz en $h$. Denote $h_{warm}(T)$ la solución con warmstart (iniciando desde $h_0^{(i)}$) y $h^*(T; h_0^{(i+1)})$ la solución correcta. Entonces:
 
-$$\|h_{warm}(T) - h^*(T; h_0^{(2)})\| \leq \Delta h \cdot e^{LT}$$
+$$\|h_{warm}(T) - h^*(T; h_0^{(i+1)})\| \leq \Delta h \cdot e^{LT}$$
 
-*Demostración.* La diferencia $d(t) = h^*(t; h_0^{(2)}) - h^*(t; h_0^{(1)})$ satisface $d(0) = h_0^{(2)} - h_0^{(1)}$ con $\|d(0)\| = \Delta h$. Por Lipschitzianidad de $f_\theta$:
+*Demostración.* La diferencia $d(\tau) = h^*(\tau; h_0^{(i+1)}) - h^*(\tau; h_0^{(i)})$ satisface $d(0) = h_0^{(i+1)} - h_0^{(i)}$ con $\|d(0)\| = \Delta h$. Por Lipschitzianidad de $f_\theta$:
 
-$$\left\|\frac{dd}{dt}\right\| \leq L \|d(t)\|$$
+$$\left\|\frac{dd}{d\tau}\right\| \leq L \|d(\tau)\|$$
 
-Aplicando Grönwall: $\|d(t)\| \leq \|d(0)\| e^{Lt} = \Delta h \cdot e^{Lt}$. Evaluando en $t = T$:
+Aplicando Grönwall: $\|d(\tau)\| \leq \|d(0)\| e^{L\tau} = \Delta h \cdot e^{L\tau}$. Evaluando en $\tau = T$:
 
 $$\|d(T)\| \leq \Delta h \cdot e^{LT}$$
 
 $\blacksquare$
 
-*Remark 8.2 (Cota ajustada).* La cota $e^{LT}$ es la cota puntual correcta. Para $L \approx 0.1, T = 1$: error máximo $\leq 1.11 \cdot \Delta h$. Si $\Delta h \approx 0.1$, el error de warmstart es $\approx 0.11$ — aceptable. La cota $(e^{LT}-1)/(LT)$ del teorema original era incorrecta para el error puntual (corresponde al error integrado o a la condición inicial promediada).
+*Remark 8.2 (Cota ajustada).* La cota $e^{LT}$ es la cota puntual correcta. Para $L \approx 0.1, T = 1$: error máximo $\leq 1.11 \cdot \Delta h$. Si $\Delta h \approx 0.1$, el error de warmstart es $\approx 0.11$ — aceptable. La cota $\frac{e^{LT}-1}{LT}$ del teorema original era incorrecta para el error puntual (corresponde al error integrado o a la condición inicial promediada).
 
 **Corolario TOWS-1.1 (Condición de utilidad).**
 El warmstart es útil iff:
