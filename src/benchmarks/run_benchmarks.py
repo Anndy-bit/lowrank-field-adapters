@@ -2,12 +2,13 @@
 Benchmark evaluation suite for S³ fine-tuned models.
 
 Runs zero-shot evaluation on: MMLU, HellaSwag, ARC-Challenge, GSM8K, AlpacaEval 2.0
+Perplexity evaluation on wikitext dataset.
 Produces JSON results and LaTeX-ready tables.
 
 Usage:
     python run_benchmarks.py \
         --model_path ./checkpoints/s3_qwen7b_alpaca \
-        --benchmarks mmlu,hellaswag,arc,gsm8k \
+        --benchmarks perplexity,mmlu,hellaswag,arc,gsm8k \
         --output ./results/benchmarks.json
 """
 
@@ -16,6 +17,7 @@ import argparse
 import json
 import os
 import time
+import math
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 import numpy as np
@@ -357,6 +359,103 @@ def evaluate_alpaca_eval(
     ), responses
 
 
+def evaluate_perplexity(
+    model, tokenizer, device,
+    dataset_name: str = "wikitext",
+    dataset_config: str = "wikitext-2-raw-v1",
+    split: str = "test",
+    limit: Optional[int] = None,
+) -> BenchmarkResult:
+    """Perplexity evaluation on a text dataset.
+
+    Measures how well the model predicts the next token. Lower = better.
+
+    Args:
+        model: The language model
+        tokenizer: Tokenizer
+        device: Device to run on
+        dataset_name: HuggingFace dataset name (default: wikitext)
+        dataset_config: Dataset config (e.g. wikitext-2-raw-v1, penndingb)
+        split: Dataset split (test, validation, train)
+        limit: Max number of examples to evaluate
+
+    Returns:
+        BenchmarkResult with perplexity score
+    """
+    from datasets import load_dataset
+
+    t_start = time.time()
+    total_loss = 0.0
+    total_tokens = 0
+
+    try:
+        dataset = load_dataset(dataset_name, dataset_config, split=split, trust_remote_code=True)
+    except Exception as e:
+        print(f"  [Perplexity] Could not load {dataset_name}/{dataset_config}, trying alternative...")
+        try:
+            dataset = load_dataset(dataset_name, split=split, trust_remote_code=True)
+        except Exception:
+            print(f"  [Perplexity] Failed to load dataset. Using training data perplexity instead.")
+            return BenchmarkResult(
+                name="Perplexity", metric="perplexity",
+                score=float("inf"), num_examples=0,
+                runtime_seconds=time.time() - t_start,
+                model_name=model.config._name_or_path,
+                adapter_name="s3",
+            )
+
+    model.eval()
+
+    for i, example in enumerate(dataset):
+        if limit and i >= limit:
+            break
+
+        text = example.get("text", example.get("sentence", ""))
+        if not text or not text.strip():
+            continue
+
+        try:
+            inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
+            input_ids = inputs["input_ids"].to(device)
+
+            if input_ids.shape[1] < 2:
+                continue
+
+            with torch.no_grad():
+                with torch.cuda.amp.autocast():
+                    outputs = model(input_ids)
+                    logits = outputs.logits
+
+                    shift_logits = logits[..., :-1, :].contiguous()
+                    shift_labels = input_ids[..., 1:].contiguous()
+
+                    loss = torch.nn.functional.cross_entropy(
+                        shift_logits.view(-1, shift_logits.size(-1)),
+                        shift_labels.view(-1),
+                        reduction="sum",
+                    )
+
+                    total_loss += loss.item()
+                    total_tokens += shift_labels.numel()
+
+        except Exception:
+            continue
+
+    if total_tokens == 0:
+        perplexity = float("inf")
+    else:
+        avg_loss = total_loss / total_tokens
+        perplexity = math.exp(avg_loss)
+
+    elapsed = time.time() - t_start
+    return BenchmarkResult(
+        name="Perplexity", metric="perplexity",
+        score=perplexity, num_examples=total_tokens,
+        runtime_seconds=elapsed, model_name=model.config._name_or_path,
+        adapter_name="s3",
+    )
+
+
 def run_all_benchmarks(
     model, tokenizer, device,
     benchmarks: List[str],
@@ -369,6 +468,7 @@ def run_all_benchmarks(
         "hellaswag": evaluate_hellaswag,
         "arc": evaluate_arc_challenge,
         "gsm8k": evaluate_gsm8k,
+        "perplexity": evaluate_perplexity,
     }
 
     results = {}

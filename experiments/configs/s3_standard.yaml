@@ -57,3 +57,19 @@ output:
   checkpoint_dir: ./checkpoints/s3_qwen7b_alpaca/
   results_dir: ./results/s3_qwen7b_alpaca/
   vram_log: ./results/s3_qwen7b_alpaca/vram_trace.csv
+
+s3_opt:
+  use_smv: true           # Delta-modulación vector para transferencia PCIe
+  use_emp: true           # Predicción de μ desde Adam moments
+  use_ter: true           # Routing ODE por entropía (N∈{1,2,4})
+  use_fdgd: true          # Filtrado de gradientes en dominio Fourier
+  use_gns: true           # Skip backward por norma de gradiente
+  use_sma: true           # Checkpoints espectrales (compresión 16x)
+  use_tows: true          # Warmstart entre tokens
+  use_dra: true           # Rank adaptativo dinámico
+  use_mso: true           # Detección de shortcuts lineales
+  use_hfisc: true         # Inicialización óptima
+  use_sgc: true           # Compresión de gradiente espectral
+  use_nfr: true           # NMF flow recycling
+  use_sbs: true           # STB bypass sampling
+  sbs_p_stb: 0.3

@@ -371,6 +371,21 @@ class TERRouter:
         """N esperado basado en distribución de entropías (estimado)."""
         return float(self._current_N)
 
+    def set_epoch(self, epoch: int) -> None:
+        """Actualiza umbrales de routing según epoch.
+        
+        Épocas tempranas: usa routing simple (N=4 fijo) para estabilidad.
+        Épocas posteriores: usa routing completo con histéresis.
+        """
+        if epoch < 1:
+            # Época 0: forzar N=4 para estabilidad inicial
+            self._current_N = 4
+            self._history.clear()
+        elif epoch == 1:
+            # Transición: habilitar histéresis gradualmente
+            self.config.hysteresis_margin = 0.1
+        # Épocas > 1: comportamiento normal con histéresis completa
+
 
 # =============================================================================
 # MSO — Manifold Shortcut ODE (Secciones 5.1-5.10)
@@ -727,14 +742,17 @@ class SMACheckpointManager:
         self._checkpoints: List[torch.Tensor] = []
 
     def save_checkpoint(self, h: torch.Tensor) -> torch.Tensor:
-        """Guarda proyección espectral s = U_k^T·h ∈ R^k."""
-        s = self.U_k_t @ h  # [d] → [k]
+        """Guarda proyección espectral s = h@U_k ∈ R^{B×k} o R^k para un sample."""
+        if h.dim() == 1:
+            s = h @ self.U_k
+        else:
+            s = h @ self.U_k  # [B, d] @ [d, k] → [B, k]
         self._checkpoints.append(s.detach())
         return s
 
     def reconstruct(self, s: torch.Tensor) -> torch.Tensor:
-        """Reconstruye h_approx = U_k·s ∈ R^d desde proyección."""
-        return self.U_k @ s
+        """Reconstruye h_approx = s@U_k^T ∈ R^d o R^{B×d}."""
+        return s @ self.U_k.t()
 
     def reconstruct_batch(self, s_batch: torch.Tensor) -> torch.Tensor:
         """Reconstruye para batch: s_batch ∈ R^{B×k} → h_batch ∈ R^{B×d}."""
@@ -994,6 +1012,21 @@ class DRAController:
         k_ratio = self.k_current / self.config.k_initial
         return 1.0 - k_ratio ** 2
 
+    def set_epoch(self, epoch: int) -> None:
+        """Actualiza thresholds de rank adaptation según epoch.
+        
+        Épocas tempranas: k más alto para capturar dinámica completa.
+        Épocas posteriores: k puede reducirse si la energía lo permite.
+        """
+        if epoch == 0:
+            # Inicial: usar k máximo para exploración
+            self.k_current = self.config.k_initial
+            self._s_history.clear()
+            self._consecutive_below_threshold = 0
+        elif epoch >= 2:
+            # Reducir paciencia para adaptación más rápida
+            self.config.n_patience = max(2, self.config.n_patience // 2)
+
 
 # =============================================================================
 # Unified S3OPT Interface
@@ -1015,51 +1048,120 @@ class S3OPTOptimizer:
     - HFISC inicializa óptimamente
 
     Usage:
-        opt = S3OPTOptimizer(model, config)
-        for epoch in range(epochs):
-            opt.set_epoch(epoch)
-            for batch in data:
-                output = opt.forward(input)
-                loss.backward()
-                opt.backward()
-                opt.step()
+        # Interface simple con flags booleanas
+        opt = S3OPTOptimizer(
+            smv=True, emp=True, ter=True, gns=True,
+            fdgd=True, sma=True, tows=True, dra=True,
+            mso=True, hfisc=True,
+        )
+
+        # Integración en training loop
+        if opt.cfg.fdgd:
+            grad = opt.fdgd.filter(grad)
+        if opt.cfg.gns and opt.gns.should_skip(grad_norm, layer_id):
+            continue  # skip backward
     """
 
     def __init__(
         self,
-        model: nn.Module,
-        smv_config: Optional[SMVConfig] = None,
-        emp_config: Optional[EMPConfig] = None,
-        ter_config: Optional[TERConfig] = None,
-        gns_config: Optional[GNSConfig] = None,
-        dra_config: Optional[DRAConfig] = None,
-        tows_config: Optional[TOWSConfig] = None,
-        sma_config: Optional[SMAConfig] = None,
-        fdgd_config: Optional[FDGDConfig] = None,
-        mso_config: Optional[MSOConfig] = None,
-        hfisc_config: Optional[HFISCConfig] = None,
+        smv: bool = False,
+        emp: bool = False,
+        ter: bool = False,
+        fdgd: bool = False,
+        gns: bool = False,
+        sma: bool = False,
+        tows: bool = False,
+        dra: bool = False,
+        mso: bool = False,
+        hfisc: bool = False,
+        U_k: Optional[torch.Tensor] = None,
+        V_k: Optional[torch.Tensor] = None,
     ):
-        self.model = model
+        self.cfg = type('obj', (object,), {
+            'smv': smv, 'emp': emp, 'ter': ter,
+            'fdgd': fdgd, 'gns': gns, 'sma': sma,
+            'tows': tows, 'dra': dra, 'mso': mso, 'hfisc': hfisc,
+        })()
 
-        # Initialize all optimizers
-        self.smv = SMVTransfer(
-            model.U_k, model.V_k, smv_config or SMVConfig()
-        )
-        self.emp = EMPPredictor(emp_config or EMPConfig())
-        self.ter = TERRouter(ter_config or TERConfig())
-        self.gns = GNSController(gns_config or GNSConfig())
-        self.dra = DRAController(dra_config or DRAConfig())
-        self.tows = TOWSWarmstarter(tows_config or TOWSConfig())
-        self.sma = SMACheckpointManager(
-            model.U_k, sma_config or SMAConfig()
-        )
-        self.fdgd = FDGDFilter(fdgd_config or FDGDConfig())
-        self.mso = MSOController(mso_config or MSOConfig())
-        self.hfisc = HFISCInitializer(hfisc_config or HFISCConfig())
+        self.smv = SMVTransfer(U_k, torch.zeros_like(U_k) if U_k is not None else None, SMVConfig()) if smv and U_k is not None else None
+        self.emp = EMPPredictor(EMPConfig()) if emp else None
+        self.ter = TERRouter(TERConfig()) if ter else None
+        self.fdgd = FDGDFilter(FDGDConfig()) if fdgd else None
+        self.gns = GNSController(GNSConfig()) if gns else None
+        self.sma = SMACheckpointManager(U_k, SMAConfig()) if sma and U_k is not None else None
+        self.tows = TOWSWarmstarter(TOWSConfig()) if tows else None
+        self.dra = DRAController(DRAConfig()) if dra else None
+        self.mso = MSOController(MSOConfig()) if mso else None
+        self.hfisc = HFISCInitializer(HFISCConfig()) if hfisc else None
+
+        self._tows_h_prev: Optional[torch.Tensor] = None
+        self._sma_storage: Dict[int, torch.Tensor] = {}
+        self._current_layer_idx = 0
+
+    def warmstart_forward(
+        self,
+        hidden_states: torch.Tensor,
+        layer_idx: int,
+    ) -> torch.Tensor:
+        """TOWS: aplica warmstart si hay coherencia, sino usa forward normal."""
+        if not self.cfg.tows or self.tows is None:
+            return hidden_states
+        self._current_layer_idx = layer_idx
+        if self._tows_h_prev is not None:
+            if self.tows.should_use_warmstart(self._tows_h_prev, hidden_states):
+                h_warm = self.tows.get_warmstart_state()
+                if h_warm is not None:
+                    hidden_states = hidden_states + 0.1 * (h_warm - hidden_states).detach()
+        self._tows_h_prev = hidden_states.detach().clone()
+        return hidden_states
+
+    def update_layer_context(self, layer) -> None:
+        """Actualiza U_k/V_k del contexto para el layer activo.
+        
+        Debe llamarse antes de _forward_layer para que SMV y SMA
+        tengan acceso a los factores SVD del layer actual.
+        """
+        if layer is None:
+            return
+        # Update SMV with current layer's U_k/V_k
+        if self.smv is not None:
+            u_k = getattr(layer, 'svmo_q', None)
+            if u_k is not None and hasattr(u_k, 'U_k'):
+                self.smv.U_k = u_k.U_k.detach().clone()
+                self.smv.V_k = getattr(u_k, 'V_k', torch.zeros_like(u_k.U_k))
+        # Update SMA with current layer's U_k
+        if self.sma is not None:
+            u_k = getattr(layer, 'svmo_q', None)
+            if u_k is not None and hasattr(u_k, 'U_k'):
+                self.sma.U_k = u_k.U_k.detach().clone()
+                self.sma.U_k_t = self.sma.U_k.t().clone()
+
+    def sma_compress(self, h: torch.Tensor, U_k: Optional[torch.Tensor] = None) -> Optional[torch.Tensor]:
+        """SMA: comprime hidden state si está habilitado. U_k puede pasarse por layer."""
+        if not self.cfg.sma:
+            return None
+        if self.sma is None and U_k is not None:
+            self.sma = SMACheckpointManager(U_k, SMAConfig())
+        if self.sma is None:
+            return None
+        return self.sma.save_checkpoint(h)
+
+    def sma_reconstruct(self, s: torch.Tensor, U_k: Optional[torch.Tensor] = None) -> Optional[torch.Tensor]:
+        """SMA: reconstruye hidden state desde checkpoint comprimido."""
+        if not self.cfg.sma or s is None:
+            return None
+        if U_k is not None and self.sma is not None:
+            self.sma = SMACheckpointManager(U_k, SMAConfig())
+        if self.sma is None:
+            return None
+        return self.sma.reconstruct(s)
 
     def set_epoch(self, epoch: int) -> None:
         """Actualiza configuraciones dependientes de epoch."""
-        pass
+        if self.ter and hasattr(self.ter, 'set_epoch'):
+            self.ter.set_epoch(epoch)
+        if self.dra and hasattr(self.dra, 'set_epoch'):
+            self.dra.set_epoch(epoch)
 
     def flops_summary(self) -> dict:
         """Resumen de ahorros de FLOPs teóricos."""

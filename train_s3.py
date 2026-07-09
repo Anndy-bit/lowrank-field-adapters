@@ -138,6 +138,7 @@ def build_s3_model(
     if hasattr(lm_head, "weight"):
         lm_head.weight.requires_grad = False
 
+    s3_opt = config.get("s3_opt", {})
     train_cfg = config["training"]
 
     trainer = FrugalTrainer(
@@ -154,6 +155,20 @@ def build_s3_model(
             warmup_ratio=train_cfg["warmup_ratio"],
             max_grad_norm=train_cfg["max_grad_norm"],
             use_amp=train_cfg.get("use_amp", True),
+            use_smv=s3_opt.get("use_smv", True),
+            use_emp=s3_opt.get("use_emp", True),
+            use_ter=s3_opt.get("use_ter", True),
+            use_fdgd=s3_opt.get("use_fdgd", True),
+            use_gns=s3_opt.get("use_gns", True),
+            use_sma=s3_opt.get("use_sma", True),
+            use_tows=s3_opt.get("use_tows", True),
+            use_dra=s3_opt.get("use_dra", True),
+            use_mso=s3_opt.get("use_mso", True),
+            use_hfisc=s3_opt.get("use_hfisc", True),
+            use_sgc=s3_opt.get("use_sgc", True),
+            use_nfr=s3_opt.get("use_nfr", True),
+            use_sbs=s3_opt.get("use_sbs", True),
+            sbs_p_stb=s3_opt.get("sbs_p_stb", 0.3),
         ),
         device=device,
     )
@@ -264,7 +279,7 @@ def main():
         print("[S³] Running benchmarks (eval only)...")
         results = run_all_benchmarks(
             base_model.to(args.device), tokenizer, args.device,
-            config.get("benchmarks", ["mmlu", "hellaswag", "arc"]),
+            config.get("benchmarks", ["perplexity", "mmlu", "hellaswag", "arc"]),
         )
         output_dir = config["output"].get("results_dir", "./results/")
         os.makedirs(output_dir, exist_ok=True)
@@ -313,7 +328,7 @@ def main():
     print("[S³] Running benchmarks on trained model...")
     results = run_all_benchmarks(
         base_model.to(args.device), tokenizer, args.device,
-        config.get("benchmarks", ["mmlu", "hellaswag", "arc"]),
+        config.get("benchmarks", ["perplexity", "mmlu", "hellaswag", "arc"]),
     )
     save_benchmark_results(results, os.path.join(output_cfg["results_dir"], "benchmarks.json"))
     format_latex_table(results, os.path.join(output_cfg["results_dir"], "benchmarks_table.tex"))

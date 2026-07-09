@@ -136,11 +136,6 @@ class FrugalTrainer:
         self.stats = FrugalStats()
 
         self.s3_opt = S3OPTOptimizer(
-            enabled=any([
-                config.use_smv, config.use_emp, config.use_ter,
-                config.use_fdgd, config.use_gns, config.use_sma,
-                config.use_tows, config.use_dra, config.use_mso, config.use_hfisc,
-            ]),
             smv=config.use_smv,
             emp=config.use_emp,
             ter=config.use_ter,
@@ -263,20 +258,20 @@ class FrugalTrainer:
         layer = self.layers[layer_idx]
         self._move_layer_weights_to_gpu(layer_idx)
 
-        if self.s3_opt.cfg.tows and hasattr(self, '_tows_h_prev'):
-            hidden_states = self.s3_opt.tows.warmstart_forward(
-                hidden_states, self._tows_h_prev, layer_idx
-            )
+        # Update S3-OPT context with current layer's SVD factors
+        self.s3_opt.update_layer_context(layer)
+
+        if self.s3_opt.cfg.tows and self.s3_opt._tows_h_prev is not None:
+            hidden_states = self.s3_opt.warmstart_forward(hidden_states, layer_idx)
 
         with torch.cuda.amp.autocast(enabled=self._amp_enabled, dtype=self.config.amp_dtype):
             outputs = layer(hidden_states)
             hidden_states = outputs[0]
 
         if self.s3_opt.cfg.sma:
-            layer.sma_compressed = self.s3_opt.sma.compress(hidden_states)
-
-        if self.s3_opt.cfg.tows:
-            self._tows_h_prev = hidden_states.detach().clone()
+            u_k = getattr(layer.svmo_q, 'U_k', None)
+            if u_k is not None:
+                layer._sma_compressed = self.s3_opt.sma_compress(hidden_states, u_k)
 
         self._move_layer_weights_to_cpu(layer_idx)
         return hidden_states
