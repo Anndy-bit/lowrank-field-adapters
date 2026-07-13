@@ -72,14 +72,17 @@ class SpectralCoupling(nn.Module):
         s: torch.Tensor,
         sigma_log: torch.Tensor,
     ) -> torch.Tensor:
+        # s: [B, ..., k] or [..., k]
+        # sigma_log: [k] - broadcast to match s shape
         Q = self.W_q(s)
-        K = self.W_k(sigma_log)
+        # Expand sigma_log to match s's batch/seq dimensions
+        sigma_log_expanded = sigma_log.expand(s.shape[:-1] + (self.k,))
+        K = self.W_k(sigma_log_expanded)
         V = self.W_v(s)
 
         attn = (Q @ K.transpose(-2, -1)) * self.scale
-        attn = attn.squeeze(1)
         attn_weights = F.softmax(attn, dim=-1)
-        delta = self.W_o(attn_weights @ V).squeeze(1)
+        delta = self.W_o(attn_weights @ V)
 
         return s + self.beta * delta
 
@@ -115,9 +118,11 @@ class STBBridge(nn.Module):
         h: torch.Tensor,
         sigma_log: torch.Tensor,
     ) -> torch.Tensor:
-        s = h @ self.U_k
+        # Ensure U_k matches input dtype
+        U_k = self.U_k.to(h.dtype)
+        s = h @ U_k
         s_tilde = self.coupling(s, sigma_log)
-        h_stb = s_tilde @ self.U_k.t()
+        h_stb = s_tilde @ U_k.t()
         return h_stb
 
     def spectral_signature(self, h: torch.Tensor) -> torch.Tensor:
@@ -153,6 +158,41 @@ class STBBridge(nn.Module):
             f"k={self.k}, head_dim={self.coupling.head_dim}, "
             f"beta={self.beta}, params={self.num_params}"
         )
+
+    @torch.no_grad()
+    def set_k(self, new_k: int):
+        """Dynamically change spectral dimension k (for DRA).
+        
+        Truncates U_k and updates coupling layer dimensions.
+        Only supports reducing k.
+        """
+        new_k = min(new_k, self.U_k.shape[1])
+        if new_k == self.k:
+            return
+        if new_k > self.k:
+            raise ValueError(f"Cannot increase k from {self.k} to {new_k} without full SVD")
+        
+        self.k = new_k
+        self.U_k = self.U_k[:, :new_k].contiguous()
+        
+        # Update coupling layer dimensions
+        old_head_dim = self.coupling.head_dim
+        self.coupling.head_dim = max(new_k // 4, 8)
+        self.coupling.scale = self.coupling.head_dim ** -0.5
+        
+        # Recreate linear layers with new dimensions
+        device = self.U_k.device
+        dtype = self.U_k.dtype
+        self.coupling.W_q = nn.Linear(new_k, self.coupling.head_dim, bias=False).to(device, dtype)
+        self.coupling.W_k = nn.Linear(new_k, self.coupling.head_dim, bias=False).to(device, dtype)
+        self.coupling.W_v = nn.Linear(new_k, self.coupling.head_dim, bias=False).to(device, dtype)
+        self.coupling.W_o = nn.Linear(self.coupling.head_dim, new_k, bias=False).to(device, dtype)
+        
+        self.coupling._init_weights()
+        self.coupling.num_params = sum(p.numel() for p in self.coupling.parameters())
+        self.num_params = self.coupling.num_params
+        
+        print(f"  [DRA] STB rank adapted: k={self.k} -> {new_k}")
 
 
 def create_stb_bridge_from_svmo(

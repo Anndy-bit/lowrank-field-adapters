@@ -1,0 +1,93 @@
+{
+  "layer_0.gate_proj": {
+    "dir": "svd_factors_test/layer_0.gate_proj",
+    "shape_U": [
+      18944,
+      128
+    ],
+    "shape_Vt": [
+      128,
+      3584
+    ],
+    "k": 128,
+    "size_bytes": 5767656
+  },
+  "layer_0.up_proj": {
+    "dir": "svd_factors_test/layer_0.up_proj",
+    "shape_U": [
+      18944,
+      128
+    ],
+    "shape_Vt": [
+      128,
+      3584
+    ],
+    "k": 128,
+    "size_bytes": 5767656
+  },
+  "layer_0.k_proj": {
+    "dir": "svd_factors_test/layer_0.k_proj",
+    "shape_U": [
+      512,
+      128
+    ],
+    "shape_Vt": [
+      128,
+      3584
+    ],
+    "k": 128,
+    "size_bytes": 1049064
+  },
+  "layer_0.o_proj": {
+    "dir": "svd_factors_test/layer_0.o_proj",
+    "shape_U": [
+      3584,
+      128
+    ],
+    "shape_Vt": [
+      128,
+      3584
+    ],
+    "k": 128,
+    "size_bytes": 1835496
+  },
+  "layer_0.down_proj": {
+    "dir": "svd_factors_test/layer_0.down_proj",
+    "shape_U": [
+      3584,
+      128
+    ],
+    "shape_Vt": [
+      128,
+      18944
+    ],
+    "k": 128,
+    "size_bytes": 5767656
+  },
+  "layer_0.q_proj": {
+    "dir": "svd_factors_test/layer_0.q_proj",
+    "shape_U": [
+      3584,
+      128
+    ],
+    "shape_Vt": [
+      128,
+      3584
+    ],
+    "k": 128,
+    "size_bytes": 1835496
+  },
+  "layer_0.v_proj": {
+    "dir": "svd_factors_test/layer_0.v_proj",
+    "shape_U": [
+      512,
+      128
+    ],
+    "shape_Vt": [
+      128,
+      3584
+    ],
+    "k": 128,
+    "size_bytes": 1049064
+  }
+}

@@ -76,8 +76,27 @@ class S3TransformerLayer(nn.Module):
         stb_beta: float = 0.5,
         enable_sbs: bool = True,
         sbs_p: float = 0.3,
+        svd_dir: Optional[str] = None,
+        layer_idx: int = 0,
+        svd_dtype: torch.dtype = torch.float32,
     ):
         super().__init__()
+
+        # Store all hyperparams for _build_from_pretrained
+        self.svmo_k = svmo_k
+        self.svmo_hidden = svmo_hidden
+        self.svmo_alpha = svmo_alpha
+        self.nmf_bottleneck = nmf_bottleneck
+        self.nmf_T = nmf_T
+        self.nmf_N = nmf_N
+        self.nmf_solver = nmf_solver
+        self.stb_head_dim = stb_head_dim
+        self.stb_beta = stb_beta
+        self.enable_sbs = enable_sbs
+        self.sbs_p = sbs_p
+        self.svd_dir = svd_dir
+        self.layer_idx = layer_idx
+        self.svd_dtype = svd_dtype
 
         self._build_from_pretrained(pretrained_layer)
         dim = self.dim
@@ -85,28 +104,21 @@ class S3TransformerLayer(nn.Module):
         attn = pretrained_layer.self_attn
         mlp = pretrained_layer.mlp
 
-        self.svmo_q = create_svmo_from_linear(
-            attn.q_proj, svmo_k, svmo_hidden, svmo_alpha
-        )
-        self.svmo_k_proj = create_svmo_from_linear(
-            attn.k_proj, svmo_k, svmo_hidden, svmo_alpha
-        )
-        self.svmo_v = create_svmo_from_linear(
-            attn.v_proj, svmo_k, svmo_hidden, svmo_alpha
-        )
-        self.svmo_o = create_svmo_from_linear(
-            attn.o_proj, svmo_k, svmo_hidden, svmo_alpha
-        )
+        def _svmo(proj, name):
+            return create_svmo_from_linear(
+                proj, svmo_k, svmo_hidden, svmo_alpha,
+                svd_dir=svd_dir, layer_name=f"layer_{layer_idx}.{name}",
+                dtype=svd_dtype,
+            )
 
-        self.svmo_up = create_svmo_from_linear(
-            mlp.up_proj, svmo_k, svmo_hidden, svmo_alpha
-        )
-        self.svmo_gate = create_svmo_from_linear(
-            mlp.gate_proj, svmo_k, svmo_hidden, svmo_alpha
-        )
-        self.svmo_down = create_svmo_from_linear(
-            mlp.down_proj, svmo_k, svmo_hidden, svmo_alpha
-        )
+        self.svmo_q = _svmo(attn.q_proj, "q_proj")
+        self.svmo_k_proj = _svmo(attn.k_proj, "k_proj")
+        self.svmo_v = _svmo(attn.v_proj, "v_proj")
+        self.svmo_o = _svmo(attn.o_proj, "o_proj")
+
+        self.svmo_up = _svmo(mlp.up_proj, "up_proj")
+        self.svmo_gate = _svmo(mlp.gate_proj, "gate_proj")
+        self.svmo_down = _svmo(mlp.down_proj, "down_proj")
 
         self.stb = STBBridge(
             self.svmo_q.U_k.detach().clone(), svmo_k, stb_head_dim, stb_beta
@@ -176,6 +188,7 @@ class S3TransformerLayer(nn.Module):
         output_attentions: bool = False,
         use_cache: bool = False,
         is_causal: bool = False,
+        nmf_N_steps: Optional[int] = None,
         **kwargs,
     ) -> Tuple[torch.Tensor, ...]:
         residual = hidden_states
@@ -223,7 +236,7 @@ class S3TransformerLayer(nn.Module):
         attn_output = self.svmo_o(attn_output)
 
         hidden_states = residual + attn_output
-        hidden_states = self.nmf_attn(hidden_states)
+        hidden_states = self.nmf_attn(hidden_states, N_steps=nmf_N_steps)
 
         normed = self._apply_norm(hidden_states, "post_attn")
         normed_flat = normed.reshape(-1, D)
@@ -234,7 +247,7 @@ class S3TransformerLayer(nn.Module):
         mlp_output = self.svmo_down(mlp_hidden).reshape(B, S, D)
 
         hidden_states = hidden_states + mlp_output
-        hidden_states = self.nmf_mlp(hidden_states)
+        hidden_states = self.nmf_mlp(hidden_states, N_steps=nmf_N_steps)
 
         outputs = (hidden_states,)
         if output_attentions:
@@ -298,6 +311,8 @@ def create_s3_layer_from_hf(
     stb_beta: float = 0.5,
     enable_sbs: bool = True,
     sbs_p: float = 0.3,
+    svd_dir: Optional[str] = None,
+    layer_idx: int = 0,
 ) -> S3TransformerLayer:
     """Create an S³ layer from a HuggingFace transformer block."""
     return S3TransformerLayer(
@@ -309,4 +324,8 @@ def create_s3_layer_from_hf(
         nmf_T=nmf_T,
         nmf_N=nmf_N,
         stb_beta=stb_beta,
+        enable_sbs=enable_sbs,
+        sbs_p=sbs_p,
+        svd_dir=svd_dir,
+        layer_idx=layer_idx,
     )

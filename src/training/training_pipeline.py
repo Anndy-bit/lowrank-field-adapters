@@ -147,6 +147,8 @@ def build_s3_model(
                 nmf_T=s3_cfg["nmf_T"],
                 nmf_N=s3_cfg["nmf_N"],
                 stb_beta=s3_cfg["stb_beta"],
+                svd_dir=svd_dir,
+                layer_idx=i,
             )
         except Exception as e:
             print(f"[S3] Skipping layer {i}: {e}")
@@ -195,6 +197,7 @@ def load_dataset(config: Dict[str, Any], tokenizer) -> DataLoader:
     """Load and tokenize dataset according to config dict.
 
     Supports both YAML config dict format and simple dict format.
+    If config.dataset_streaming is True, uses streaming mode (0 RAM for data).
     """
     from datasets import load_dataset
 
@@ -215,7 +218,8 @@ def load_dataset(config: Dict[str, Any], tokenizer) -> DataLoader:
         out_key = config.get("output_key", "output")
         max_seq = config.get("max_seq_length", 512)
 
-    dataset = load_dataset(path, split=split, trust_remote_code=True)
+    streaming = config.get("dataset_streaming", False)
+    dataset = load_dataset(path, split=split, trust_remote_code=True, streaming=streaming)
 
     def tokenize_fn(example):
         instruction = example[inst_key]
@@ -224,10 +228,18 @@ def load_dataset(config: Dict[str, Any], tokenizer) -> DataLoader:
         tokens = tokenizer.encode(text, truncation=True, max_length=max_seq)
         return {"input_ids": tokens}
 
-    tokenized = dataset.map(tokenize_fn, remove_columns=dataset.column_names)
-    tokenized.set_format(type="torch", columns=["input_ids"])
-
-    sorted_dataset = sorted(tokenized, key=lambda x: len(x["input_ids"]))
+    if streaming:
+        # Streaming (IterableDataset): use with_format instead of set_format
+        tokenized = dataset.map(tokenize_fn, remove_columns=dataset.column_names)
+        tokenized = tokenized.with_format("torch")
+        sorted_dataset = tokenized  # Can't sort streaming
+        shuffle = False
+    else:
+        # Regular dataset: can sort by length
+        tokenized = dataset.map(tokenize_fn, remove_columns=dataset.column_names)
+        tokenized.set_format(type="torch", columns=["input_ids"])
+        sorted_dataset = sorted(tokenized, key=lambda x: len(x["input_ids"]))
+        shuffle = True
 
     def collate(batch):
         max_len = max(len(x["input_ids"]) for x in batch)
@@ -239,9 +251,9 @@ def load_dataset(config: Dict[str, Any], tokenizer) -> DataLoader:
     dataloader = DataLoader(
         sorted_dataset,
         batch_size=1,
-        shuffle=True,
+        shuffle=shuffle,
         collate_fn=collate,
     )
 
-    print(f"[Data] Loaded {len(dataset)} examples")
+    print(f"[Data] Loaded {len(dataset) if not streaming else 'streaming'} examples")
     return dataloader

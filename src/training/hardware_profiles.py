@@ -26,11 +26,12 @@ from .frugal_trainer import FrugalConfig
 
 
 class HardwareTier(Enum):
-    """Three GPU classes targeted by the S³ method."""
+    """Four GPU classes targeted by the S³ method."""
 
-    LOW = "low"        # 2-4 GB VRAM: GTX 1050, 1050 Ti, MX550
-    MEDIUM = "medium"  # 8-16 GB VRAM: RTX 3060, 4060, 4070, 5090 Ti
-    HIGH = "high"      # 32+ GB VRAM: RTX 4090, A6000, A100, H100
+    LOW = "low"          # 2-4 GB VRAM: GTX 1050, 1050 Ti, MX550
+    MEDIUM = "medium"    # 8-16 GB VRAM: RTX 3060, 4060, 4070, 5090 Ti
+    HIGH = "high"        # 32+ GB VRAM: RTX 4090, A6000, A100, H100
+    EXTREME = "extreme"  # Multi-GPU / 70B+ models: cuantización 4-bit + FSDP
 
 
 @dataclass
@@ -67,20 +68,28 @@ def _low_config() -> FrugalConfig:
         layer_swap=True,
         token_by_token=True,
         vram_budget_mb=2048,
+        # FASE 1: Memory management for 2GB VRAM / 10GB RAM
+        svd_dir="./svd_factors/",
+        svd_storage="mmap",              # Lazy load SVD per layer from disk
+        base_model_offload=True,         # Accelerate offload to CPU + disk
+        base_model_offload_dir="/tmp/s3_offload",
+        dataset_streaming=True,          # 0 RAM for data
+        cpu_ram_budget_gb=10.0,          # Hard limit CPU RAM
+        model_quantization="none",
         # S3-OPT: ALL enabled for MAX VRAM savings on 2GB
-        use_smv=True,          # PCIe vector delta-modulation (~32x bandwidth reduction)
-        use_emp=True,          # MLP μ prediction (skip MLP forward when H predictable)
-        use_ter=True,          # ODE N routing (1/2/4 steps vs always 4)
-        use_fdgd=True,         # Fourier gradient filtering (stability)
-        use_gns=True,          # Skip backward when grad < ε·max (skip ~20-30% layers)
-        use_sma=True,          # Spectral checkpoint compression (4096→128 = 16x)
-        use_tows=True,         # Token warmstart (reduces ODE init overhead)
-        use_dra=True,          # Dynamic rank k (128→64 when s(t) low)
-        use_mso=True,          # Shortcut detection (linear bypass when κ < κ_thresh)
-        use_hfisc=True,        # Optimal init (√(2/d) for GELU)
-        use_sgc=True,          # Spectral gradient compression (backward pass)
-        use_nfr=True,          # NMF flow recycling (reuse intermediate states)
-        use_sbs=True,          # STB bypass sampling (p_stb=0.3)
+        use_smv=True,
+        use_emp=True,
+        use_ter=True,
+        use_fdgd=True,
+        use_gns=True,
+        use_sma=True,
+        use_tows=True,
+        use_dra=True,
+        use_mso=True,
+        use_hfisc=True,
+        use_sgc=True,
+        use_nfr=True,
+        use_sbs=True,
         sbs_p_stb=0.3,
     )
 
@@ -106,20 +115,28 @@ def _medium_config() -> FrugalConfig:
         layer_swap=False,
         token_by_token=False,
         vram_budget_mb=12288,
+        # FASE 1: Memory management for 8-16GB VRAM
+        svd_dir="./svd_factors/",
+        svd_storage="mmap",
+        base_model_offload=False,        # Full model fits in VRAM
+        base_model_offload_dir="/tmp/s3_offload",
+        dataset_streaming=False,         # RAM OK for data
+        cpu_ram_budget_gb=24.0,
+        model_quantization="none",
         # S3-OPT: ALL enabled — VRAM allows full compute mode
-        use_smv=True,          # Bandwidth reduction still useful
-        use_emp=True,          # Skip MLP when H predictable
-        use_ter=True,          # ODE routing (1/2/4 steps)
-        use_fdgd=True,         # Gradient stability filtering
-        use_gns=True,          # Skip low-gradient backward passes
-        use_sma=True,          # Compression for activation storage
-        use_tows=True,         # Token warmstart
-        use_dra=True,          # Rank adaptation
-        use_mso=True,          # Shortcut detection
-        use_hfisc=True,        # Optimal init
-        use_sgc=True,          # Gradient compression
-        use_nfr=True,          # Flow recycling
-        use_sbs=True,          # STB bypass
+        use_smv=True,
+        use_emp=True,
+        use_ter=True,
+        use_fdgd=True,
+        use_gns=True,
+        use_sma=True,
+        use_tows=True,
+        use_dra=True,
+        use_mso=True,
+        use_hfisc=True,
+        use_sgc=True,
+        use_nfr=True,
+        use_sbs=True,
         sbs_p_stb=0.3,
     )
 
@@ -145,20 +162,82 @@ def _high_config() -> FrugalConfig:
         layer_swap=False,
         token_by_token=False,
         vram_budget_mb=40960,
+        # FASE 1: Memory management for 32GB+ VRAM
+        svd_dir="./svd_factors/",
+        svd_storage="ram",               # Keep all SVD in RAM (fastest)
+        base_model_offload=False,
+        base_model_offload_dir="/tmp/s3_offload",
+        dataset_streaming=False,
+        cpu_ram_budget_gb=64.0,
+        model_quantization="none",
         # S3-OPT: compute speedup only — disable memory optimizations
-        use_smv=False,         # No PCIe transfer bottleneck
-        use_emp=True,          # Skip MLP when predictable (speedup)
-        use_ter=True,          # ODE routing (1/2/4 steps)
-        use_fdgd=False,        # No need for gradient filtering
-        use_gns=False,         # Process all layers — VRAM is ample
-        use_sma=False,         # No need to compress activations
-        use_tows=True,         # Token warmstart (speedup)
-        use_dra=False,         # Keep full rank (k=128)
-        use_mso=True,          # Shortcut detection (speedup)
-        use_hfisc=True,        # Optimal init (convergence)
-        use_sgc=False,         # No gradient compression needed
-        use_nfr=False,         # Full NMF flow (no recycling needed)
-        use_sbs=True,          # STB bypass (speedup)
+        use_smv=False,
+        use_emp=True,
+        use_ter=True,
+        use_fdgd=False,
+        use_gns=False,
+        use_sma=False,
+        use_tows=True,
+        use_dra=False,
+        use_mso=True,
+        use_hfisc=True,
+        use_sgc=False,
+        use_nfr=False,
+        use_sbs=True,
+        sbs_p_stb=0.3,
+    )
+
+
+def _extreme_config() -> FrugalConfig:
+    """70B+ models — cuantización 4-bit NF4 + offload + gradient checkpointing.
+
+    VRAM budget: configurable (típicamente 8-24GB para 70B en 4-bit).
+    Modelo base en NF4 (~35GB), SVD factors en mmap, todas las optimizaciones S3-OPT.
+    Compatible con multi-GPU FSDP si hay varias GPUs disponibles.
+    """
+    return FrugalConfig(
+        micro_batch_size=1,
+        gradient_accumulation_steps=64,
+        learning_rate=5e-4,
+        weight_decay=0.01,
+        betas=(0.9, 0.999),
+        max_epochs=3,
+        warmup_ratio=0.03,
+        max_grad_norm=1.0,
+        log_interval=5,
+        use_amp=True,
+        amp_dtype=torch.bfloat16,
+        layer_swap=True,
+        token_by_token=True,
+        vram_budget_mb=8192,
+        svd_dir="./svd_factors/",
+        svd_storage="mmap",
+        base_model_offload=True,
+        base_model_offload_dir="/tmp/s3_offload_70b",
+        dataset_streaming=True,
+        cpu_ram_budget_gb=32.0,
+        model_quantization="4bit",
+        quant_compute_dtype=torch.bfloat16,
+        quant_double_quant=True,
+        quant_quant_type="nf4",
+        fsdp_enabled=False,
+        fsdp_world_size=1,
+        cpu_offload_params=True,
+        cpu_offload_optims=True,
+        use_gradient_checkpointing=True,
+        use_smv=True,
+        use_emp=True,
+        use_ter=True,
+        use_fdgd=True,
+        use_gns=True,
+        use_sma=True,
+        use_tows=True,
+        use_dra=True,
+        use_mso=True,
+        use_hfisc=True,
+        use_sgc=True,
+        use_nfr=True,
+        use_sbs=True,
         sbs_p_stb=0.3,
     )
 
@@ -187,6 +266,14 @@ _PROFILES: Dict[HardwareTier, HardwareProfile] = {
         token_by_token=False,
         vram_budget_mb=40960,
         description="32+ GB VRAM: RTX 4090, A6000, A100, H100",
+    ),
+    HardwareTier.EXTREME: HardwareProfile(
+        tier=HardwareTier.EXTREME,
+        config=_extreme_config(),
+        layer_swap=True,
+        token_by_token=True,
+        vram_budget_mb=8192,
+        description="70B+ models: 4-bit NF4 quantization + CPU offload + FSDP",
     ),
 }
 

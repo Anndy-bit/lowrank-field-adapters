@@ -1,5 +1,5 @@
 # S³ Standard Configuration
-# Target: GTX 1050 (2GB VRAM), Qwen2.5-7B-Instruct, Alpaca 52K
+# Target: GTX 1050 (2-4GB VRAM), Qwen2.5-7B-Instruct, Alpaca 52K
 
 experiment:
   name: s3_standard_qwen7b_alpaca
@@ -12,6 +12,8 @@ model:
   dtype: fp16
   max_seq_length: 512
   svd_dir: ./svd_factors/qwen2.5-7b/
+  # FASE 1: Memory management
+  offload_folder: /tmp/s3_offload
 
 s3:
   svmo_k: 128
@@ -36,6 +38,16 @@ training:
   use_amp: true
   amp_dtype: fp16
   log_interval: 10
+  # FASE 1: Memory management (LOW profile)
+  layer_swap: true
+  token_by_token: true
+  vram_budget_mb: 3500          # GTX 1050 4GB - reserve 512MB for adapters
+  svd_storage: mmap             # Lazy load SVD from disk per layer
+  base_model_offload: true      # Accelerate CPU/GPU offload
+  base_model_offload_dir: /tmp/s3_offload
+  dataset_streaming: true       # 0 RAM for data
+  cpu_ram_budget_gb: 10.0       # Hard limit CPU RAM
+  model_quantization: none
 
 data:
   dataset: alpaca

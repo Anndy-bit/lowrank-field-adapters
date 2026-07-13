@@ -69,6 +69,10 @@ class SVMOAdapter(nn.Module):
         k: int = 128,
         hidden_dim: int = 32,
         alpha: float = 0.3,
+        svd_dir: Optional[str] = None,
+        layer_name: Optional[str] = None,
+        use_randomized_svd: bool = False,
+        dtype: torch.dtype = torch.float32,
     ):
         super().__init__()
         d_out, d_in = weight.shape
@@ -79,23 +83,45 @@ class SVMOAdapter(nn.Module):
         self.d_in = d_in
         self.k = k
         self.alpha = alpha
+        self.dtype = dtype
 
-        U_k, S_k, Vt_k = self._compute_svd(weight, k)
-        self.register_buffer("U_k", U_k)
-        self.register_buffer("S_k", S_k)
-        self.register_buffer("Vt_k", Vt_k)
-        self.S_k_log = torch.log(S_k + 1e-8)
+        # Try to load precomputed SVD from disk
+        if svd_dir is not None and layer_name is not None:
+            U_k, S_k, Vt_k = self._load_svd_from_disk(svd_dir, layer_name, k)
+            if U_k is not None:
+                self.register_buffer("U_k", U_k.to(dtype))
+                self.register_buffer("S_k", S_k.to(dtype))
+                self.register_buffer("Vt_k", Vt_k.to(dtype))
+                self.S_k_log = torch.log(S_k.to(dtype) + 1e-8)
+            else:
+                # Fallback: compute SVD
+                U_k, S_k, Vt_k = self._compute_svd(weight, k, use_randomized_svd)
+                self.register_buffer("U_k", U_k.to(dtype))
+                self.register_buffer("S_k", S_k.to(dtype))
+                self.register_buffer("Vt_k", Vt_k.to(dtype))
+                self.S_k_log = torch.log(S_k.to(dtype) + 1e-8)
+        else:
+            # Compute SVD (offline or fallback)
+            U_k, S_k, Vt_k = self._compute_svd(weight, k, use_randomized_svd)
+            self.register_buffer("U_k", U_k.to(dtype))
+            self.register_buffer("S_k", S_k.to(dtype))
+            self.register_buffer("Vt_k", Vt_k.to(dtype))
+            self.S_k_log = torch.log(S_k.to(dtype) + 1e-8)
 
         self.modulation = ModulationMLP(hidden_dim)
+        # Ensure modulation MLP matches dtype
+        self.modulation = self.modulation.to(dtype)
         self.num_params = sum(p.numel() for p in self.modulation.parameters())
 
         self.has_bias = bias is not None
         if self.has_bias:
-            self.register_buffer("bias", bias.data.clone())
+            self.register_buffer("bias", bias.data.clone().to(dtype))
         else:
             self.bias = None
 
-    def _compute_svd(self, weight: torch.Tensor, k: int):
+    def _compute_svd(self, weight: torch.Tensor, k: int, use_randomized: bool = False):
+        if use_randomized:
+            return randomized_svd(weight, k)
         weight_cpu = weight.detach().float().cpu()
         U_full, S_full, Vt_full = torch.linalg.svd(weight_cpu, full_matrices=False)
         U_k = U_full[:, :k].clone()
@@ -103,9 +129,46 @@ class SVMOAdapter(nn.Module):
         Vt_k = Vt_full[:k, :].clone()
         return U_k, S_k, Vt_k
 
+    def _load_svd_from_disk(self, svd_dir: str, layer_name: str, k: int):
+        """Load precomputed SVD factors from safetensors files.
+        
+        Expected structure:
+            svd_dir/
+                layer_name/
+                    U_k.safetensors
+                    S_k.safetensors
+                    Vt_k.safetensors
+        """
+        from pathlib import Path
+        try:
+            from safetensors.torch import load_file
+        except ImportError:
+            return None, None, None
+        
+        layer_dir = Path(svd_dir) / layer_name
+        if not layer_dir.exists():
+            return None, None, None
+        
+        try:
+            U_k = load_file(str(layer_dir / "U_k.safetensors"))["U_k"]
+            S_k = load_file(str(layer_dir / "S_k.safetensors"))["S_k"]
+            Vt_k = load_file(str(layer_dir / "Vt_k.safetensors"))["Vt_k"]
+            
+            # Truncate to k if needed
+            if U_k.shape[1] > k:
+                U_k = U_k[:, :k]
+                S_k = S_k[:k]
+                Vt_k = Vt_k[:k, :]
+            
+            return U_k, S_k, Vt_k
+        except Exception:
+            return None, None, None
+
     def _modulate(self) -> torch.Tensor:
         """Apply m_θ to Σ_k: returns S_mod ∈ R^k."""
-        g_out = self.modulation(self.S_k_log.unsqueeze(-1)).squeeze(-1)
+        # Ensure S_k_log matches modulation MLP dtype
+        x = self.S_k_log.unsqueeze(-1).to(next(self.modulation.parameters()).dtype)
+        g_out = self.modulation(x).squeeze(-1)
         factor = 1.0 + self.alpha * torch.tanh(g_out)
         return self.S_k * factor
 
@@ -131,15 +194,24 @@ class SVMOAdapter(nn.Module):
         Returns:
             output: (batch_size, d_out) or (*, d_out)
         """
-        S_mod = self._modulate()
+        # Ensure input is at least 2D [batch, d_in]
+        if x.dim() == 1:
+            x = x.unsqueeze(0)
+        
+        # Ensure SVD factors match input dtype for matmul compatibility
+        target_dtype = x.dtype
+        U_k = self.U_k.to(target_dtype)
+        Vt_k = self.Vt_k.to(target_dtype)
+        S_mod = self._modulate().to(target_dtype)
+        
         orig_shape = x.shape
         x_flat = x.reshape(-1, self.d_in)
-        z = x_flat @ self.Vt_k.t()
+        z = x_flat @ Vt_k.t()
         z_mod = z * S_mod.unsqueeze(0)
-        y = z_mod @ self.U_k.t()
+        y = z_mod @ U_k.t()
         y = y.reshape(orig_shape[:-1] + (self.d_out,))
         if self.has_bias:
-            y = y + self.bias
+            y = y + self.bias.to(target_dtype)
         return y
 
     def forward_full(self, x: torch.Tensor) -> torch.Tensor:
@@ -184,6 +256,34 @@ class SVMOAdapter(nn.Module):
             f"alpha={self.alpha}, trainable={self.num_params}, "
             f"VRAM={self.vram_estimate_mb():.1f}MB"
         )
+
+    @torch.no_grad()
+    def set_rank(self, new_k: int):
+        """Dynamically change SVD rank k (for DRA - Dynamic Rank Adaptation).
+        
+        Truncates or pads U_k, S_k, Vt_k to new rank. If increasing k,
+        requires that original full SVD factors are available (not just top-k).
+        For now, only supports reducing k (truncation).
+        """
+        new_k = min(new_k, min(self.d_out, self.d_in))
+        if new_k == self.k:
+            return
+        if new_k > self.k:
+            # Cannot increase k without full SVD factors
+            # Would need to recompute or load from disk
+            raise ValueError(f"Cannot increase k from {self.k} to {new_k} without full SVD")
+        
+        # Truncate to new_k
+        self.k = new_k
+        self.U_k = self.U_k[:, :new_k].contiguous()
+        self.S_k = self.S_k[:new_k].contiguous()
+        self.Vt_k = self.Vt_k[:new_k, :].contiguous()
+        self.S_k_log = torch.log(self.S_k + 1e-8)
+        
+        # Update modulation MLP input dimension if needed (it's scalar per component)
+        # ModulationMLP takes scalar input, so no change needed there.
+        
+        print(f"  [DRA] Rank adapted: k={self.k} -> {new_k}")
 
 
 def randomized_svd(
@@ -236,6 +336,9 @@ def create_svmo_from_linear(
     hidden_dim: int = 32,
     alpha: float = 0.3,
     use_randomized_svd: bool = False,
+    svd_dir: Optional[str] = None,
+    layer_name: Optional[str] = None,
+    dtype: torch.dtype = torch.float32,
 ) -> SVMOAdapter:
     """Convenience: create SVMOAdapter from an existing nn.Linear.
 
@@ -245,6 +348,9 @@ def create_svmo_from_linear(
         hidden_dim: hidden dim of modulation MLP
         alpha: modulation amplitude
         use_randomized_svd: if True, use randomized SVD (faster for d>1024)
+        svd_dir: directory with precomputed SVD factors (offline)
+        layer_name: name of layer (e.g., "layer_0.q_proj") for loading from svd_dir
+        dtype: storage dtype for SVD factors (fp16 for memory savings)
 
     Returns:
         SVMOAdapter configured with layer's weights and bias.
@@ -262,17 +368,18 @@ def create_svmo_from_linear(
         svmo.d_in = d_in
         svmo.k = k_eff
         svmo.alpha = alpha
+        svmo.dtype = dtype
         U_k, S_k, Vt_k = randomized_svd(weight, k_eff)
-        svmo.register_buffer("U_k", U_k)
-        svmo.register_buffer("S_k", S_k)
-        svmo.register_buffer("Vt_k", Vt_k)
-        svmo.S_k_log = torch.log(S_k + 1e-8)
-        svmo.modulation = ModulationMLP(hidden_dim)
+        svmo.register_buffer("U_k", U_k.to(dtype))
+        svmo.register_buffer("S_k", S_k.to(dtype))
+        svmo.register_buffer("Vt_k", Vt_k.to(dtype))
+        svmo.S_k_log = torch.log(S_k.to(dtype) + 1e-8)
+        svmo.modulation = ModulationMLP(hidden_dim).to(dtype)
         svmo.num_params = sum(p.numel() for p in svmo.modulation.parameters())
         svmo.has_bias = bias is not None
         if svmo.has_bias:
-            svmo.register_buffer("bias", bias.clone())
+            svmo.register_buffer("bias", bias.to(dtype))
         else:
             svmo.bias = None
         return svmo
-    return SVMOAdapter(weight, bias, k, hidden_dim, alpha)
+    return SVMOAdapter(weight, bias, k, hidden_dim, alpha, svd_dir=svd_dir, layer_name=layer_name, dtype=dtype)

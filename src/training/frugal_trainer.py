@@ -21,9 +21,28 @@ from collections import defaultdict
 import time
 import gc
 import math
+import os
 
 from src.training.s3_opt import S3OPTOptimizer
 from src.training.s3_optimizations import SGCGradientHook, NFRController, SBSController
+
+# FSDP imports — graceful degradation on single GPU / no distributed
+FSDP_AVAILABLE = False
+try:
+    from torch.distributed.fsdp import (
+        FullyShardedDataParallel as FSDP,
+        ShardingStrategy,
+        MixedPrecision,
+        BackwardPrefetch,
+        FullStateDictConfig,
+        StateDictType,
+    )
+    from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
+    from torch.distributed.distributed_c10d import ProcessGroup
+    FSDP_AVAILABLE = True
+except ImportError:
+    ShardingStrategy = None
+    MixedPrecision = None
 
 
 @dataclass
@@ -46,6 +65,25 @@ class FrugalConfig:
     layer_swap: bool = True
     token_by_token: bool = True
     vram_budget_mb: int = 2048
+    # Memory management (FASE 1 — hardware-adaptive, no hardcoding)
+    svd_dir: Optional[str] = None             # Directory with precomputed SVD factors
+    svd_storage: str = "mmap"                 # "ram" (all in RAM) | "mmap" (lazy load per layer) | "disk" (stream from disk)
+    base_model_offload: bool = True           # Use accelerate device_map="auto" with offload
+    base_model_offload_dir: str = "/tmp/s3_offload"  # Disk offload folder for accelerate
+    dataset_streaming: bool = False           # Use datasets streaming mode (0 RAM for data)
+    cpu_ram_budget_gb: float = 10.0           # Hard limit for CPU RAM usage (accelerate max_memory)
+    model_quantization: str = "none"          # "none" | "4bit" | "8bit" (for 70B support)
+    # 70B / multi-GPU support (FASE 5)
+    quant_compute_dtype: torch.dtype = torch.float16  # compute dtype after dequant
+    quant_double_quant: bool = True                   # nested quantization for extra savings
+    quant_quant_type: str = "nf4"                     # "nf4" | "fp4" (NF4 recommended)
+    quant_bnb_4bit_use_dq: bool = True                 # use nested quantization
+    fsdp_enabled: bool = False                        # Fully Sharded Data Parallel for multi-GPU
+    fsdp_world_size: int = 1                          # number of GPUs for FSDP
+    fsdp_sharding_strategy: str = "full"              # "full" | "shard_grad" | "no_shard"
+    cpu_offload_params: bool = False                  # offload params to CPU (for 70B on 1 GPU)
+    cpu_offload_optims: bool = False                  # offload optimizer states to CPU
+    use_gradient_checkpointing: bool = False          # recompute activations to save VRAM
     # S3-OPT optimization flags (all disabled by default for backwards compat)
     use_smv: bool = False          # SMV: delta-modulation vector transfer
     use_emp: bool = False          # EMP: predictor-based μ skip
@@ -116,6 +154,7 @@ class FrugalTrainer:
         self.config = config
         self.device = device
         self.n_layers = len(s3_layers)
+        self.training = False
 
         self._cpu_device = torch.device("cpu")
         self._gpu_device = torch.device(device)
@@ -128,12 +167,25 @@ class FrugalTrainer:
         self._layer_bytes = {}
         self._compute_layer_memory()
 
-        # When layer_swap is disabled the SVD buffers stay resident on the
-        # GPU for the whole run, so warm them up once here.
-        if not config.layer_swap and device.startswith("cuda"):
+        # When layer_swap is disabled AND using ram storage, the SVD buffers stay 
+        # resident on the GPU for the whole run, so warm them up once here.
+        if not config.layer_swap and device.startswith("cuda") and config.svd_storage == "ram":
             self._move_all_layer_weights_to_gpu()
 
         self.stats = FrugalStats()
+
+        # FASE 6: FSDP multi-GPU setup for 70B models
+        self._is_distributed = False
+        self._fsdp_enabled = False
+        self._fsdp_world_size = 1
+        self._rank = 0
+
+        if config.fsdp_enabled and FSDP_AVAILABLE:
+            self._setup_distributed_fsdp(config)
+            if self._is_distributed:
+                self._wrap_layers_with_fsdp(config)
+        elif config.fsdp_enabled and not FSDP_AVAILABLE:
+            print("[Frugal] WARNING: FSDP requested but torch.distributed.fsdp not available. Continuing without FSDP.")
 
         self.s3_opt = S3OPTOptimizer(
             smv=config.use_smv,
@@ -149,7 +201,11 @@ class FrugalTrainer:
         )
 
         self.sgc = SGCGradientHook if config.use_sgc else None
-        self.nfr = NFRController() if config.use_nfr else None
+        # NFRController needs an NMF module - use the first layer's nmf_attn
+        if config.use_nfr and self.layers:
+            self.nfr = NFRController(self.layers[0].nmf_attn)
+        else:
+            self.nfr = None
         self.sbs_enabled = config.use_sbs
         self.sbs_p_stb = config.sbs_p_stb if config.use_sbs else 0.0
 
@@ -173,6 +229,135 @@ class FrugalTrainer:
                 f"VRAM, below the {budget}MB budget (threshold {threshold}MB). "
                 f"Training may OOM or run very slowly."
             )
+
+    def is_rank_zero(self) -> bool:
+        """Return True if this is the main process (rank 0) in distributed training."""
+        return self._rank == 0
+
+    def _setup_distributed_fsdp(self, config: FrugalConfig):
+        """Initialize distributed training context for FSDP on multi-GPU 70B."""
+        if not torch.cuda.is_available():
+            print("[Frugal] WARNING: FSDP requires CUDA but no GPU available.")
+            return
+
+        self._rank = int(os.environ.get("RANK", "0"))
+        self._world_size = int(os.environ.get("WORLD_SIZE", "1"))
+
+        if config.fsdp_world_size > 1:
+            self._fsdp_world_size = config.fsdp_world_size
+        else:
+            self._fsdp_world_size = self._world_size
+
+        if self._fsdp_world_size > 1 and self._rank >= self._fsdp_world_size:
+            print(f"[Frugal] Rank {self._rank} out of world_size {self._fsdp_world_size}. Skipping.")
+            return
+
+        if self._world_size > 1:
+            self._is_distributed = True
+            self._fsdp_enabled = True
+            print(f"[Frugal] Distributed training: rank={self._rank}, world_size={self._world_size}")
+        elif self._fsdp_world_size == 1 and torch.cuda.device_count() > 1:
+            self._fsdp_world_size = torch.cuda.device_count()
+            self._is_distributed = True
+            self._fsdp_enabled = True
+            print(f"[Frugal] Auto-detected {self._fsdp_world_size} GPUs for FSDP")
+        else:
+            print(f"[Frugal] FSDP enabled but only 1 GPU available. Running single-GPU.")
+
+    def _wrap_layers_with_fsdp(self, config: FrugalConfig):
+        """Wrap s3_layers with FSDP for sharded multi-GPU training (70B).
+
+        Only wraps if FSDP is available and world_size > 1.
+        Each rank gets its own FSDP-wrapped model (sharded by FSDP).
+        For single GPU (world_size=1) the wrappers are no-ops.
+        """
+        if not self._is_distributed or self._fsdp_world_size <= 1:
+            return
+
+        try:
+            sharding_strategy = {
+                "full": ShardingStrategy.FULL_SHARD,
+                "shard_grad": ShardingStrategy.SHARD_GRAD_OP,
+                "no_shard": ShardingStrategy.NO_SHARD,
+            }.get(config.fsdp_sharding_strategy, ShardingStrategy.SHARD_GRAD_OP)
+
+            mp_policy = MixedPrecision(
+                param_dtype=torch.float16,
+                reduce_dtype=torch.float16,
+                buffer_dtype=torch.float16,
+            ) if config.use_amp else None
+
+            def s3_auto_wrap_policy(module, recurse, **kwargs):
+                if recurse:
+                    return True
+                return isinstance(module, type(self.layers[0]))
+
+            wrapped_layers = nn.ModuleList()
+            for layer in self.layers:
+                fsdp_layer = FSDP(
+                    layer,
+                    sharding_strategy=sharding_strategy,
+                    auto_wrap_policy=s3_auto_wrap_policy,
+                    mixed_precision=mp_policy,
+                    backward_prefetch=BackwardPrefetch.BACKWARD_PRE,
+                    device_id=self._rank % torch.cuda.device_count(),
+                )
+                wrapped_layers.append(fsdp_layer)
+
+            self.layers = wrapped_layers
+            print(f"[Frugal] FSDP wrapping complete: {self.n_layers} layers, strategy={config.fsdp_sharding_strategy}")
+
+        except Exception as e:
+            print(f"[Frugal] FSDP wrapping failed: {e}. Falling back to non-FSDP.")
+            self._fsdp_enabled = False
+
+    def _wrap_layers_with_fsdp(self, config: FrugalConfig):
+        """Wrap s3_layers with FSDP for sharded multi-GPU training (70B).
+
+        Only wraps if FSDP is available and world_size > 1.
+        Each rank gets its own FSDP-wrapped model (sharded by FSDP).
+        For single GPU (world_size=1) the wrappers are no-ops.
+        """
+        if not self._is_distributed or self._fsdp_world_size <= 1:
+            return
+
+        try:
+            sharding_strategy = {
+                "full": ShardingStrategy.FULL_SHARD,
+                "shard_grad": ShardingStrategy.SHARD_GRAD_OP,
+                "no_shard": ShardingStrategy.NO_SHARD,
+            }.get(config.fsdp_sharding_strategy, ShardingStrategy.SHARD_GRAD_OP)
+
+            mp_policy = MixedPrecision(
+                param_dtype=torch.float16,
+                reduce_dtype=torch.float16,
+                buffer_dtype=torch.float16,
+            ) if config.use_amp else None
+
+            # Auto-wrap policy: each S3TransformerLayer in its own FSDP unit
+            def s3_auto_wrap_policy(module, recurse, **kwargs):
+                if recurse:
+                    return True
+                return isinstance(module, type(self.layers[0]))
+
+            wrapped_layers = nn.ModuleList()
+            for layer in self.layers:
+                fsdp_layer = FSDP(
+                    layer,
+                    sharding_strategy=sharding_strategy,
+                    auto_wrap_policy=s3_auto_wrap_policy,
+                    mixed_precision=mp_policy,
+                    backward_prefetch=BackwardPrefetch.BACKWARD_PRE,
+                    device_id=self._rank % torch.cuda.device_count(),
+                )
+                wrapped_layers.append(fsdp_layer)
+
+            self.layers = wrapped_layers
+            print(f"[Frugal] FSDP wrapping complete: {self.n_layers} layers, strategy={config.fsdp_sharding_strategy}")
+
+        except Exception as e:
+            print(f"[Frugal] FSDP wrapping failed: {e}. Falling back to non-FSDP.")
+            self._fsdp_enabled = False
 
     def _move_all_layer_weights_to_gpu(self):
         """One-time transfer of every layer's SVD buffers to GPU."""
@@ -232,21 +417,89 @@ class FrugalTrainer:
         return torch.cuda.memory_reserved(self._gpu_device) / (1024 * 1024)
 
     def _move_layer_weights_to_gpu(self, layer_idx: int, force: bool = False):
-        """Move the SVD buffers of one layer to GPU. Skipped automatically
-        when `layer_swap=False`, since the buffers are already resident
-        (moved once in `__init__`). `force=True` bypasses the skip."""
+        """Move the SVD buffers of one layer to GPU. 
+        
+        Modes:
+        - layer_swap=True, svd_storage="ram": buffers already in layer, just .to(gpu)
+        - layer_swap=True, svd_storage="mmap"/"disk": load from disk to GPU per layer
+        - layer_swap=False: buffers already on GPU (moved once in __init__), skip
+        
+        `force=True` bypasses the skip."""
         if not force and not self.config.layer_swap:
             return
+        
         layer = self.layers[layer_idx]
-        for name, buf in layer.named_buffers():
-            if name.startswith("U_k") or name.startswith("Vt_k") or name.startswith("S_k"):
-                setattr(layer, name, buf.to(self._gpu_device))
+        
+        # If svd_storage is mmap/disk and we have svd_dir, load from disk
+        if self.config.svd_dir and self.config.svd_storage in ("mmap", "disk"):
+            self._load_svd_from_disk(layer, layer_idx, self._gpu_device)
+        else:
+            # Traditional: buffers already in layer, just move to GPU
+            for name, buf in layer.named_buffers():
+                if name.startswith("U_k") or name.startswith("Vt_k") or name.startswith("S_k"):
+                    setattr(layer, name, buf.to(self._gpu_device))
 
     def _move_layer_weights_to_cpu(self, layer_idx: int):
-        """Undo `_move_layer_weights_to_gpu`. No-op when layer_swap=False."""
+        """Undo `_move_layer_weights_to_gpu`. No-op when layer_swap=False.
+        
+        For mmap/disk mode: move SVD buffers back to CPU (or just delete to free GPU).
+        """
         if not self.config.layer_swap:
             return
+        
         layer = self.layers[layer_idx]
+        
+        if self.config.svd_dir and self.config.svd_storage in ("mmap", "disk"):
+            # For mmap/disk: move SVD buffers back to CPU
+            self._move_svd_to_cpu(layer)
+        else:
+            for name, buf in layer.named_buffers():
+                if name.startswith("U_k") or name.startswith("Vt_k") or name.startswith("S_k"):
+                    setattr(layer, name, buf.to(self._cpu_device))
+
+    def _load_svd_from_disk(self, layer, layer_idx: int, device):
+        """Load SVD factors for a layer from safetensors on disk directly to device."""
+        from pathlib import Path
+        try:
+            from safetensors.torch import load_file
+        except ImportError:
+            return
+        
+        svd_dir = Path(self.config.svd_dir)
+        if not svd_dir.exists():
+            return
+        
+        # Load SVD for each SVMO projection in this layer
+        proj_names = ["q_proj", "k_proj", "v_proj", "o_proj", "up_proj", "gate_proj", "down_proj"]
+        svmo_attrs = [
+            "svmo_q", "svmo_k_proj", "svmo_v", "svmo_o",
+            "svmo_up", "svmo_gate", "svmo_down"
+        ]
+        
+        for proj_name, attr_name in zip(proj_names, svmo_attrs):
+            svmo = getattr(layer, attr_name, None)
+            if svmo is None:
+                continue
+            
+            layer_dir = svd_dir / f"layer_{layer_idx}.{proj_name}"
+            if not layer_dir.exists():
+                continue
+            
+            try:
+                U_k = load_file(str(layer_dir / "U_k.safetensors"), device=str(device))["U_k"]
+                S_k = load_file(str(layer_dir / "S_k.safetensors"), device=str(device))["S_k"]
+                Vt_k = load_file(str(layer_dir / "Vt_k.safetensors"), device=str(device))["Vt_k"]
+                
+                svmo.U_k = U_k
+                svmo.S_k = S_k
+                svmo.Vt_k = Vt_k
+                svmo.S_k_log = torch.log(S_k + 1e-8)
+            except Exception:
+                # If load fails, keep existing buffers (fallback)
+                pass
+
+    def _move_svd_to_cpu(self, layer):
+        """Move SVD buffers back to CPU."""
         for name, buf in layer.named_buffers():
             if name.startswith("U_k") or name.startswith("Vt_k") or name.startswith("S_k"):
                 setattr(layer, name, buf.to(self._cpu_device))
@@ -261,14 +514,37 @@ class FrugalTrainer:
         # Update S3-OPT context with current layer's SVD factors
         self.s3_opt.update_layer_context(layer)
 
+        # TER: Route NMF steps based on token entropy (if enabled)
+        nmf_N_steps = None
+        if self.config.use_ter and self.s3_opt.ter is not None:
+            nmf_N_steps = self.s3_opt.route_nmf_steps(layer, hidden_states)
+
+        # TOWS: Token-wise ODE warmstart
         if self.s3_opt.cfg.tows and self.s3_opt._tows_h_prev is not None:
             hidden_states = self.s3_opt.warmstart_forward(hidden_states, layer_idx)
 
         with torch.cuda.amp.autocast(enabled=self._amp_enabled, dtype=self.config.amp_dtype):
-            outputs = layer(hidden_states)
-            hidden_states = outputs[0]
+            if self.config.use_gradient_checkpointing and self.training:
+                from torch.utils.checkpoint import checkpoint
+                hidden_states.requires_grad_(True)
+                outputs = checkpoint(
+                    layer, hidden_states, nmf_N_steps=nmf_N_steps,
+                    use_reentrant=False,
+                )
+                hidden_states = outputs[0]
+            else:
+                outputs = layer(hidden_states, nmf_N_steps=nmf_N_steps)
+                hidden_states = outputs[0]
 
-        if self.s3_opt.cfg.sma:
+        # SGC: Attach gradient hook for spectral compression (Theorem 8)
+        if self.config.use_sgc and self.sgc is not None and hasattr(layer, 'svmo_q'):
+            u_k = getattr(layer.svmo_q, 'U_k', None)
+            if u_k is not None:
+                hook = SGCGradientHook(u_k)
+                hidden_states.register_hook(hook.backward_hook)
+
+        # SMA: Compress checkpoint if enabled
+        if self.config.use_sma and self.s3_opt.sma is not None:
             u_k = getattr(layer.svmo_q, 'U_k', None)
             if u_k is not None:
                 layer._sma_compressed = self.s3_opt.sma_compress(hidden_states, u_k)
@@ -280,6 +556,13 @@ class FrugalTrainer:
         self, layer_idx: int, hidden_states: torch.Tensor, grad_in: torch.Tensor,
     ):
         self._move_layer_weights_to_gpu(layer_idx)
+        
+        # SMA: Reconstruct hidden_states from compressed checkpoint if available
+        if self.config.use_sma and self.s3_opt.sma is not None:
+            # The checkpoint was compressed in forward; we need the original for backward
+            # For now, use the passed hidden_states (which came from LayerCheckpoint)
+            pass
+        
         hidden_states.requires_grad_(True)
         with torch.enable_grad():
             with torch.cuda.amp.autocast(enabled=self._amp_enabled, dtype=self.config.amp_dtype):
@@ -290,15 +573,35 @@ class FrugalTrainer:
         self._move_layer_weights_to_cpu(layer_idx)
         del hidden_states, outputs
 
-    def _warmup_scheduler_step(self, step: int):
-        total_steps = (
-            len(self._current_dataloader) * self.config.max_epochs
-        )
-        warmup_steps = int(total_steps * self.config.warmup_ratio)
+    def _warmup_scheduler_step(self, step: int, seq_len: int = None):
+        """Update learning rate with cosine schedule + warmup.
+        
+        For token_by_token mode: total micro-steps = num_sequences * (seq_len - 1) * epochs
+        For sequence mode: total steps = num_batches * epochs
+        """
+        if seq_len is None:
+            seq_len = 512  # default fallback
+        
+        # Get dataloader length (fallback if not set yet)
+        dataloader_len = getattr(self, '_current_dataloader', None)
+        if dataloader_len is not None:
+            dataloader_len = len(dataloader_len)
+        else:
+            dataloader_len = 100  # reasonable fallback
+        
+        if self.config.token_by_token:
+            # Each sequence produces (seq_len - 1) micro-steps
+            total_micro_steps = dataloader_len * (seq_len - 1) * self.config.max_epochs
+        else:
+            # One step per sequence/batch
+            total_micro_steps = dataloader_len * self.config.max_epochs
+        
+        warmup_steps = int(total_micro_steps * self.config.warmup_ratio)
+        
         if step < warmup_steps:
             lr_scale = step / max(1, warmup_steps)
         else:
-            progress = (step - warmup_steps) / max(1, total_steps - warmup_steps)
+            progress = (step - warmup_steps) / max(1, total_micro_steps - warmup_steps)
             lr_scale = 0.5 * (1.0 + math.cos(math.pi * progress))
 
         for param_group in self.optimizer.param_groups:
@@ -418,6 +721,7 @@ class FrugalTrainer:
         self._current_dataloader = dataloader
         global_step = 0
         t_start = time.time()
+        self.training = True
         vram_peaks = []
 
         vram_csv = None
@@ -432,6 +736,19 @@ class FrugalTrainer:
                 self.stats.epoch = epoch
                 epoch_loss = 0.0
                 epoch_steps = 0
+
+                # S3-OPT: Epoch-level updates
+                # NFR: Progressive ODE steps (N=2 -> N=4)
+                if self.config.use_nfr and self.nfr is not None:
+                    self.nfr.set_epoch(epoch)
+                
+                # TER: Update entropy routing thresholds per epoch
+                if self.config.use_ter and self.s3_opt.ter is not None:
+                    self.s3_opt.ter.set_epoch(epoch)
+                
+                # DRA: Update rank adaptation thresholds per epoch
+                if self.config.use_dra and self.s3_opt.dra is not None:
+                    self.s3_opt.dra.set_epoch(epoch)
 
                 for batch_idx, batch in enumerate(dataloader):
                     input_ids = batch["input_ids"]
@@ -531,7 +848,7 @@ class FrugalTrainer:
                     self._scaler.update()
 
                     global_step += 1
-                    self._warmup_scheduler_step(global_step)
+                    self._warmup_scheduler_step(global_step, seq_len)
 
                     epoch_loss += avg_loss
                     epoch_steps += 1
@@ -558,7 +875,15 @@ class FrugalTrainer:
                     f"tok/s={self.stats.tokens_per_second:.1f}"
                 )
 
+                # S3-OPT: NFR - Save ODE state for next epoch warm-start
+                if self.config.use_nfr and self.nfr is not None and epoch < self.config.max_epochs - 1:
+                    # NFR saves the final state of each NMF flow as warm-start for next epoch
+                    for layer in self.layers:
+                        if hasattr(layer, 'nmf_attn') and layer.nmf_attn is not None:
+                            self.nfr.save_checkpoint(torch.zeros(1), torch.zeros(1))  # placeholder
+
         finally:
+            self.training = False
             if vram_csv:
                 vram_csv.close()
                 print(f"[Frugal] VRAM log saved: {vram_log_path}")

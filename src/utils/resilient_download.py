@@ -114,6 +114,14 @@ def download_model_resilient(
             raise RuntimeError(f"Failed to download {filename} after {max_retries} attempts: {last_error}")
 
     print(f"  Download complete: {model_cache}")
+    # Find the latest snapshot directory
+    snapshots_dir = model_cache / "snapshots"
+    if snapshots_dir.exists():
+        snapshots = list(snapshots_dir.iterdir())
+        if snapshots:
+            latest_snapshot = max(snapshots, key=lambda p: p.stat().st_mtime)
+            print(f"  Using snapshot: {latest_snapshot}")
+            return str(latest_snapshot)
     return str(model_cache)
 
 
@@ -152,7 +160,7 @@ def load_model_with_resume(
     tokenizer_error = None
     for attempt in range(max_retries):
         try:
-            tokenizer = AutoTokenizer.from_pretrained(model_dir, trust_remote_code=True)
+            tokenizer = AutoTokenizer.from_pretrained(model_dir, trust_remote_code=True, use_fast=False)
             break
         except Exception as e:
             tokenizer_error = e

@@ -96,7 +96,20 @@ class NMFFlow(nn.Module):
     ) -> torch.Tensor:
         return h + dt * self.field(h, t)
 
-    def forward(self, h: torch.Tensor) -> torch.Tensor:
+    def forward(self, h: torch.Tensor, N_steps: Optional[int] = None) -> torch.Tensor:
+        """Forward pass with optional dynamic N_steps (for TER routing).
+        
+        Args:
+            h: Input hidden states
+            N_steps: Override number of integration steps (for TER)
+            
+        Returns:
+            Adapted hidden states
+        """
+        # Use dynamic N_steps if provided, else use self.N_steps
+        n_steps = N_steps if N_steps is not None else self.N_steps
+        dt = self.T / n_steps
+        
         orig_shape = h.shape
         is_3d = len(orig_shape) == 3
         if is_3d:
@@ -111,13 +124,29 @@ class NMFFlow(nn.Module):
 
         h_current = h
         t_current = 0.0
-        for _ in range(self.N_steps):
-            h_current = step_fn(h_current, t_current, self.dt)
-            t_current += self.dt
+        for _ in range(n_steps):
+            h_current = step_fn(h_current, t_current, dt)
+            t_current += dt
 
         if is_3d:
             h_current = h_current.reshape(orig_shape)
         return h_current
+
+    def get_bottleneck_activation(self, h: torch.Tensor) -> torch.Tensor:
+        """Get the bottleneck activation (output of W_in) for TER entropy computation."""
+        orig_shape = h.shape
+        is_3d = len(orig_shape) == 3
+        if is_3d:
+            h = h.reshape(-1, orig_shape[-1])
+        
+        # Get pre-tanh activation: W_in([h; t]) where t=0 at start
+        t_tensor = torch.zeros(h.shape[0], 1, device=h.device, dtype=h.dtype)
+        h_t = torch.cat([h, t_tensor], dim=-1)
+        bottleneck = torch.tanh(self.field.W_in(h_t))
+        
+        if is_3d:
+            bottleneck = bottleneck.reshape(orig_shape[0], orig_shape[1], -1)
+        return bottleneck
 
     def deformation(self, h: torch.Tensor) -> torch.Tensor:
         """Return Δh = h_adapted - h_original."""

@@ -1120,6 +1120,8 @@ class S3OPTOptimizer:
         
         Debe llamarse antes de _forward_layer para que SMV y SMA
         tengan acceso a los factores SVD del layer actual.
+        
+        Also handles DRA: if rank should change, applies it to all SVMO adapters.
         """
         if layer is None:
             return
@@ -1135,6 +1137,67 @@ class S3OPTOptimizer:
             if u_k is not None and hasattr(u_k, 'U_k'):
                 self.sma.U_k = u_k.U_k.detach().clone()
                 self.sma.U_k_t = self.sma.U_k.t().clone()
+        
+        # DRA: Dynamic Rank Adaptation - check if rank should change
+        if self.cfg.dra and self.dra is not None and hasattr(layer, 'svmo_q'):
+            # Compute s(t) signal from current layer's singular values
+            sigma = getattr(layer.svmo_q, 'S_k', None)
+            if sigma is not None:
+                s_signal = self.dra.compute_s(sigma)
+                if self.dra.should_adjust(s_signal):
+                    new_k = self.dra.adjust_k(s_signal)
+                    if new_k != self.dra.k_current:
+                        self._apply_dra_rank_change(layer, new_k)
+
+    def _apply_dra_rank_change(self, layer, new_k: int) -> None:
+        """Apply DRA rank change to all SVMO adapters in a layer."""
+        # Get all SVMO adapters in the layer
+        svmo_attrs = [
+            "svmo_q", "svmo_k_proj", "svmo_v", "svmo_o",
+            "svmo_up", "svmo_gate", "svmo_down"
+        ]
+        for attr_name in svmo_attrs:
+            svmo = getattr(layer, attr_name, None)
+            if svmo is not None and hasattr(svmo, 'set_rank'):
+                try:
+                    svmo.set_rank(new_k)
+                except Exception:
+                    pass  # Skip if set_rank not implemented or fails
+        
+        # Also update STB which uses the same k
+        stb = getattr(layer, 'stb', None)
+        if stb is not None and hasattr(stb, 'set_k'):
+            try:
+                stb.set_k(new_k)
+            except Exception:
+                pass
+
+    def route_nmf_steps(self, layer, hidden_states: torch.Tensor) -> int:
+        """TER: Route NMF integration steps based on token entropy.
+        
+        Computes entropy from NMF bottleneck activation and returns
+        N_steps ∈ {1, 2, 4} for the current token.
+        """
+        if not self.cfg.ter or self.ter is None:
+            return None  # Use default
+        
+        # Get bottleneck activation from NMF (post-attention or post-MLP)
+        nmf = getattr(layer, 'nmf_attn', None) or getattr(layer, 'nmf_mlp', None)
+        if nmf is None or not hasattr(nmf, 'get_bottleneck_activation'):
+            return None
+        
+        try:
+            bottleneck = nmf.get_bottleneck_activation(hidden_states)
+            # Use first token's bottleneck for routing decision
+            if bottleneck.dim() == 3:
+                bottleneck = bottleneck[0, 0]  # [B, S, d_b] -> [d_b]
+            elif bottleneck.dim() == 2:
+                bottleneck = bottleneck[0]  # [B, d_b] -> [d_b]
+            
+            H = self.ter.compute_entropy(bottleneck)
+            return self.ter.route(H)
+        except Exception:
+            return None
 
     def sma_compress(self, h: torch.Tensor, U_k: Optional[torch.Tensor] = None) -> Optional[torch.Tensor]:
         """SMA: comprime hidden state si está habilitado. U_k puede pasarse por layer."""

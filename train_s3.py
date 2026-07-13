@@ -104,6 +104,8 @@ def build_s3_model(
                 nmf_T=s3_cfg["nmf_T"],
                 nmf_N=s3_cfg["nmf_N"],
                 stb_beta=s3_cfg["stb_beta"],
+                svd_dir=svd_dir,
+                layer_idx=i,
             )
         except Exception as e:
             print(f"[S3] Skipping layer {i}: {e}")
@@ -241,16 +243,59 @@ def main():
 
     print(f"[S³] Loading model: {config['model']['name']}")
     from transformers import AutoModelForCausalLM, AutoTokenizer
+    from accelerate import infer_auto_device_map
 
     tokenizer = AutoTokenizer.from_pretrained(config["model"]["name"])
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
 
+    # FASE 1: Use accelerate for hardware-adaptive model offloading
+    model_name = config["model"]["name"]
+    dtype = getattr(torch, config["model"]["dtype"])
+    
+    # Build max_memory dict from config (if provided)
+    max_memory = None
+    offload_folder = config["model"].get("offload_folder", "/tmp/s3_offload")
+    if args.device.startswith("cuda"):
+        vram_budget = config["training"].get("vram_budget_mb", 2048)
+        cpu_ram_budget = config["training"].get("cpu_ram_budget_gb", 10.0)
+        # Reserve 512MB for adapters/activations on GPU
+        gpu_usable = max(vram_budget - 512, 1)
+        max_memory = {
+            0: f"{gpu_usable}MB",
+            "cpu": f"{int(cpu_ram_budget * 1024)}MB"
+        }
+        print(f"[S³] Using accelerate offload: GPU={gpu_usable}MB, CPU={int(cpu_ram_budget*1024)}MB, offload_dir={offload_folder}")
+    else:
+        cpu_ram_budget = config["training"].get("cpu_ram_budget_gb", 10.0)
+        max_memory = {"cpu": f"{int(cpu_ram_budget * 1024)}MB"}
+        print(f"[S³] CPU-only mode: max_memory={max_memory}")
+
+    # FASE 5: 4-bit quantization for 70B models
+    quantization = config["model"].get("quantization", "none")
+    quant_config = None
+    if quantization == "4bit":
+        from transformers import BitsAndBytesConfig
+        quant_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=getattr(torch, config["model"].get("quant_compute_dtype", "bfloat16")),
+            bnb_4bit_use_double_quant=config["model"].get("quant_double_quant", True),
+            bnb_4bit_quant_type=config["model"].get("quant_type", "nf4"),
+        )
+        print(f"[S³] 4-bit NF4 quantization enabled (compute_dtype={config['model'].get('quant_compute_dtype', 'bfloat16')})")
+    elif quantization == "8bit":
+        from transformers import BitsAndBytesConfig
+        quant_config = BitsAndBytesConfig(load_in_8bit=True)
+        print("[S³] 8-bit quantization enabled")
+
     base_model = AutoModelForCausalLM.from_pretrained(
-        config["model"]["name"],
-        torch_dtype=getattr(torch, config["model"]["dtype"]),
-        device_map="cpu",
+        model_name,
+        torch_dtype=dtype,
+        device_map="auto" if max_memory else "cpu",
+        max_memory=max_memory,
+        offload_folder=offload_folder,
         low_cpu_mem_usage=True,
+        quantization_config=quant_config,
     )
     for param in base_model.parameters():
         param.requires_grad = False
@@ -310,28 +355,36 @@ def main():
     def log_fn(stats):
         pass
 
-    print("[S³] Starting frugal training with full monitoring...")
+    # Multi-GPU / FSDP: only rank 0 runs monitoring, checkpointing, benchmarks
+    is_main = trainer.is_rank_zero() if hasattr(trainer, 'is_rank_zero') else True
+    fsdp_world = getattr(trainer, '_fsdp_world_size', 1) if hasattr(trainer, '_fsdp_world_size') else 1
+
+    print(f"[S³] {'Rank 0' if is_main else f'Rank worker'} starting training (fsdp_world={fsdp_world})...")
     t_start = time.time()
-    trainer.train(dataloader, log_fn=log_fn, monitor=monitor)
+    trainer.train(dataloader, log_fn=log_fn if is_main else None, monitor=monitor if is_main else None)
     elapsed = time.time() - t_start
-    print(f"[S³] Training complete in {elapsed:.1f}s ({elapsed/3600:.1f}h)")
 
-    monitor.stop()
+    if is_main:
+        print(f"[S³] Training complete in {elapsed:.1f}s ({elapsed/3600:.1f}h)")
+        monitor.stop()
 
-    from src.training.training_monitor import generate_plots, print_paper_table
-    generate_plots(monitor_dir, monitor.run_id)
-    print_paper_table(monitor_dir, monitor.run_id)
+        from src.training.training_monitor import generate_plots, print_paper_table
+        generate_plots(monitor_dir, monitor.run_id)
+        print_paper_table(monitor_dir, monitor.run_id)
 
-    ckpt_path = os.path.join(output_cfg["checkpoint_dir"], "checkpoint.pt")
-    trainer.save_checkpoint(ckpt_path)
+        ckpt_path = os.path.join(output_cfg["checkpoint_dir"], "checkpoint.pt")
+        trainer.save_checkpoint(ckpt_path)
 
-    print("[S³] Running benchmarks on trained model...")
-    results = run_all_benchmarks(
-        base_model.to(args.device), tokenizer, args.device,
-        config.get("benchmarks", ["perplexity", "mmlu", "hellaswag", "arc"]),
-    )
-    save_benchmark_results(results, os.path.join(output_cfg["results_dir"], "benchmarks.json"))
-    format_latex_table(results, os.path.join(output_cfg["results_dir"], "benchmarks_table.tex"))
+        print("[S³] Running benchmarks on trained model...")
+        results = run_all_benchmarks(
+            base_model.to(args.device), tokenizer, args.device,
+            config.get("benchmarks", ["perplexity", "mmlu", "hellaswag", "arc"]),
+        )
+        save_benchmark_results(results, os.path.join(output_cfg["results_dir"], "benchmarks.json"))
+        format_latex_table(results, os.path.join(output_cfg["results_dir"], "benchmarks_table.tex"))
+        print("[S³] Pipeline complete.")
+    else:
+        print(f"[S³] Worker rank done (elapsed {elapsed:.1f}s)")
 
     print("[S³] Pipeline complete.")
 
