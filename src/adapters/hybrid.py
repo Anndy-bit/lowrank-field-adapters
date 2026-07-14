@@ -136,11 +136,11 @@ class S3TransformerLayer(nn.Module):
         attn = pretrained_layer.self_attn
         if hasattr(attn, "q_proj"):
             self.dim = attn.q_proj.in_features
-            self.num_heads = attn.num_heads
-            self.head_dim = attn.head_dim
+            self.num_heads = getattr(attn, "num_heads", 28)
+            self.head_dim = getattr(attn, "head_dim", self.dim // self.num_heads)
         elif hasattr(attn, "q_proj") and hasattr(attn.q_proj, "weight"):
             self.dim = attn.q_proj.weight.shape[1]
-            self.num_heads = getattr(attn, "num_heads", 32)
+            self.num_heads = getattr(attn, "num_heads", 28)
             self.head_dim = self.dim // self.num_heads
         else:
             raise ValueError(
@@ -193,6 +193,33 @@ class S3TransformerLayer(nn.Module):
     ) -> Tuple[torch.Tensor, ...]:
         residual = hidden_states
 
+        # Normalize to exactly 3D [B, S, D]
+        ndim = hidden_states.dim()
+        if ndim == 2:
+            # [S, D] → [1, S, D]
+            hidden_states = hidden_states.unsqueeze(0)
+            residual = hidden_states
+        elif ndim == 1:
+            # [D] → [1, 1, D]
+            hidden_states = hidden_states.unsqueeze(0).unsqueeze(0)
+            residual = hidden_states
+        elif ndim == 4:
+            # [B, 1, S, D] — the 2nd dim (index 1) is a spurious singleton from checkpoint storage.
+            # Remove it via squeeze(1) → [B, S, D].
+            # If shape is [B, X, S, D] with X!=1, flatten dims 1..-2 as extra batch: [B*X, S, D].
+            B, X, S, D = hidden_states.shape
+            if X == 1:
+                hidden_states = hidden_states.squeeze(1)  # → [B, S, D]
+                residual = hidden_states
+            else:
+                hidden_states = hidden_states.reshape(B * X, S, D)
+                residual = hidden_states
+        elif ndim > 4:
+            # [B, X, Y, ..., S, D] — flatten dims 1..-2 as extra batch dim
+            B = hidden_states.shape[0]
+            hidden_states = hidden_states.reshape(B, -1, hidden_states.shape[-1])
+            residual = hidden_states
+
         B, S, D = hidden_states.shape
         hidden_states_flat = hidden_states.reshape(-1, D)
         sigma_log = torch.log(self.svmo_q._modulate() + 1e-8)
@@ -202,16 +229,39 @@ class S3TransformerLayer(nn.Module):
 
         normed = self._apply_norm(hidden_states, "input")
 
+        # Ensure normed is exactly 3D [B, S, D]
+        if normed.dim() == 2:
+            normed = normed.unsqueeze(0)  # [B, D] → [1, B, D]
+        elif normed.dim() == 1:
+            normed = normed.unsqueeze(0).unsqueeze(0)  # [D] → [1, 1, D]
+        elif normed.dim() == 4:
+            # [B, 1, S, D] → squeeze out the second dim
+            normed = normed.squeeze(1)  # → [B, S, D]
+        elif normed.dim() > 4:
+            normed = normed.flatten(0, -3)  # → [B*..., S, D]
+
         B, S, D = normed.shape
-        normed_flat = normed.reshape(-1, D)
+        normed_flat = normed.reshape(B * S, D)
 
-        q = self.svmo_q(normed_flat).reshape(B, S, self.num_heads, self.head_dim)
-        k = self.svmo_k_proj(normed_flat).reshape(B, S, self.num_heads, self.head_dim)
-        v = self.svmo_v(normed_flat).reshape(B, S, self.num_heads, self.head_dim)
+        q_out = self.svmo_q(normed_flat)
+        k_out = self.svmo_k_proj(normed_flat)
+        v_out = self.svmo_v(normed_flat)
 
-        q = q.transpose(1, 2)
-        k = k.transpose(1, 2)
-        v = v.transpose(1, 2)
+        q_dim = q_out.shape[-1]
+        k_dim = k_out.shape[-1]
+        v_dim = v_out.shape[-1]
+
+        num_q_heads = q_dim // self.head_dim
+        num_kv_heads = k_dim // self.head_dim
+
+        q = q_out.reshape(B, S, num_q_heads, self.head_dim).transpose(1, 2)
+        k = k_out.reshape(B, S, num_kv_heads, self.head_dim).transpose(1, 2)
+        v = v_out.reshape(B, S, num_kv_heads, self.head_dim).transpose(1, 2)
+
+        if num_kv_heads < num_q_heads:
+            repeat_factor = num_q_heads // num_kv_heads
+            k = k.repeat_interleave(repeat_factor, dim=1)
+            v = v.repeat_interleave(repeat_factor, dim=1)
 
         scale = 1.0 / math.sqrt(self.head_dim)
         attn_weights = torch.matmul(q, k.transpose(-2, -1)) * scale
@@ -260,6 +310,12 @@ class S3TransformerLayer(nn.Module):
     def _apply_norm(
         self, hidden_states: torch.Tensor, norm_type: str
     ) -> torch.Tensor:
+        # Guarantee 3D at entry
+        if hidden_states.dim() == 2:
+            hidden_states = hidden_states.unsqueeze(1)  # [B, D] → [B, 1, D]
+        elif hidden_states.dim() == 1:
+            hidden_states = hidden_states.unsqueeze(0).unsqueeze(0)  # [D] → [1, 1, D]
+
         attr_map = {
             "input": ["norm_input_layernorm", "norm_input_norm"],
             "post_attn": ["norm_post_attention_layernorm", "norm_post_attn_norm"],

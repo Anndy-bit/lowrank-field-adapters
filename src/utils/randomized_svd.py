@@ -313,6 +313,49 @@ def main():
         except Exception:
             lib_versions[lib] = "unknown"
 
+    # ── Compute aggregated metrics (BEFORE building manifest) ──────────────────
+    elapsed = time.time() - t_start
+    n_projections = len(layer_metrics)
+
+    from transformers import AutoConfig
+    try:
+        model_config = AutoConfig.from_pretrained(args.model, trust_remote_code=True)
+        hidden_size = getattr(model_config, "hidden_size", 3584)
+        num_hidden_layers = getattr(model_config, "num_hidden_layers", 28)
+        intermediate_size = getattr(model_config, "intermediate_size", 18944)
+        vocab_size = getattr(model_config, "vocab_size", 151936)
+        embed_params = vocab_size * hidden_size
+        layer_params = 4 * hidden_size * hidden_size + 3 * hidden_size * intermediate_size
+        total_model_params = embed_params + num_hidden_layers * layer_params + vocab_size * hidden_size
+    except Exception:
+        total_model_params = 7_610_000_000
+
+    compressed_params = 0
+    total_k_eff = 0
+    recon_errors = []
+    energy_retained_list = []
+    for lm in layer_metrics.values():
+        k_eff = lm["k_eff"]
+        d_out, d_in = lm["d_out"], lm["d_in"]
+        compressed_params += k_eff * (d_out + d_in + 1)
+        total_k_eff += k_eff
+        recon_errors.append(lm["reconstruction_error_relative"])
+        energy_retained_list.append(lm["energy_retained"])
+
+    avg_eff_rank = total_k_eff / n_projections if n_projections > 0 else args.k
+    avg_recon_error = sum(recon_errors) / len(recon_errors) if recon_errors else 0
+    max_recon_error = max(recon_errors) if recon_errors else 0
+    avg_energy = sum(energy_retained_list) / len(energy_retained_list) if energy_retained_list else 0
+    compression_ratio = total_model_params / compressed_params if compressed_params > 0 else 0
+
+    peak_ram_gb = 0
+    try:
+        import psutil
+        peak_ram_gb = psutil.Process().memory_info().rss / (1024**3)
+    except Exception:
+        pass
+
+    # ── Build manifest with all computed metrics ───────────────────────────────
     manifest = {
         "algorithm": "randomized_svd_halko_martinsson_tropp_2011",
         "model_id": args.model,
@@ -325,13 +368,23 @@ def main():
             "device": args.device,
             "storage_dtype": args.dtype,
         },
+        "compression": {
+            "original_params": total_model_params,
+            "compressed_params": compressed_params,
+            "compression_ratio": round(compression_ratio, 2),
+            "avg_effective_rank": round(avg_eff_rank, 2),
+            "avg_energy_retained": round(avg_energy, 6),
+            "avg_reconstruction_error": round(avg_recon_error, 6),
+            "max_reconstruction_error": round(max_recon_error, 6),
+        },
         "library_versions": lib_versions,
         "execution": {
             "started_utc": datetime.now(timezone.utc).isoformat(),
-            "elapsed_seconds": round(time.time() - t_start, 1),
+            "elapsed_seconds": round(elapsed, 1),
             "n_layers_processed": n_layers,
-            "n_projections_saved": len(layer_metrics),
+            "n_projections_saved": n_projections,
             "total_size_gb": round(total_saved / (1024**3), 3),
+            "peak_ram_gb": round(peak_ram_gb, 2),
         },
         "layer_metrics": layer_metrics,
     }
@@ -340,12 +393,27 @@ def main():
     with open(metadata_path, "w") as f:
         json.dump(manifest, f, indent=2)
 
-    elapsed = time.time() - t_start
-    print(f"\n[SVD] Done! {len(layer_metrics)} layers saved in {elapsed:.1f}s")
-    print(f"[SVD] Model SHA256: {model_hasher.hexdigest()[:16]}...")
-    print(f"[SVD] Total size: {total_saved / (1024**3):.2f} GB {args.dtype}")
-    print(f"[SVD] Output: {args.output}")
-    print(f"[SVD] Metadata: {metadata_path}")
+    # ── Print paper-grade summary table ───────────────────────────────────────
+    print()
+    print("=" * 60)
+    print(f"  Model: {args.model}")
+    print(f"  Linear layers processed: {n_projections}")
+    print(f"  Requested rank: {args.k}")
+    print(f"  Average effective rank: {avg_eff_rank:.1f}")
+    print()
+    print(f"  Original parameters: {total_model_params/1e9:.2f}B")
+    print(f"  Compressed SVD parameters: {compressed_params/1e6:.2f}M")
+    print(f"  Compression ratio: {compression_ratio:.1f}x")
+    print()
+    print(f"  Average energy retained: {avg_energy:.4f} ({avg_energy*100:.2f}%)")
+    print(f"  Average reconstruction error: {avg_recon_error:.5f}")
+    print(f"  Maximum reconstruction error: {max_recon_error:.5f}")
+    print()
+    print(f"  Peak RAM: {peak_ram_gb:.2f} GB")
+    print(f"  Elapsed: {elapsed:.1f} s")
+    print(f"  Storage: {total_saved / (1024**3):.3f} GB ({args.dtype})")
+    print("=" * 60)
+    print(f"\n[SVD] Manifest: {metadata_path}")
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ Core strategy:
 
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from typing import Optional, Dict, List, Callable, Any
 from dataclasses import dataclass, field
@@ -151,6 +152,8 @@ class FrugalTrainer:
         self.layers = s3_layers
         self.embedding = embedding
         self.lm_head = lm_head
+        self._lm_head_weight = lm_head.weight
+        self._lm_head_bias = lm_head.bias
         self.config = config
         self.device = device
         self.n_layers = len(s3_layers)
@@ -159,7 +162,7 @@ class FrugalTrainer:
         self._cpu_device = torch.device("cpu")
         self._gpu_device = torch.device(device)
         self._amp_enabled = config.use_amp and device.startswith("cuda")
-        self._scaler = torch.cuda.amp.GradScaler(enabled=self._amp_enabled)
+        self._scaler = torch.amp.GradScaler("cuda", enabled=self._amp_enabled)
 
         self._check_vram_budget()
 
@@ -438,6 +441,19 @@ class FrugalTrainer:
             for name, buf in layer.named_buffers():
                 if name.startswith("U_k") or name.startswith("Vt_k") or name.startswith("S_k"):
                     setattr(layer, name, buf.to(self._gpu_device))
+            # Also move modulation MLP and STB parameters to GPU
+            if device.startswith("cuda"):
+                for attr_name in ["svmo_q", "svmo_k_proj", "svmo_v", "svmo_o",
+                                   "svmo_up", "svmo_gate", "svmo_down"]:
+                    svmo = getattr(layer, attr_name, None)
+                    if svmo is not None and hasattr(svmo, 'modulation'):
+                        svmo.modulation.to(self._gpu_device)
+                stb = getattr(layer, 'stb', None)
+                if stb is not None:
+                    for buf_attr in ['U_k', 'Vt_k']:
+                        buf = getattr(stb, buf_attr, None)
+                        if buf is not None:
+                            setattr(stb, buf_attr, buf.to(self._gpu_device))
 
     def _move_layer_weights_to_cpu(self, layer_idx: int):
         """Undo `_move_layer_weights_to_gpu`. No-op when layer_swap=False.
@@ -489,20 +505,44 @@ class FrugalTrainer:
                 U_k = load_file(str(layer_dir / "U_k.safetensors"), device=str(device))["U_k"]
                 S_k = load_file(str(layer_dir / "S_k.safetensors"), device=str(device))["S_k"]
                 Vt_k = load_file(str(layer_dir / "Vt_k.safetensors"), device=str(device))["Vt_k"]
-                
+
                 svmo.U_k = U_k
                 svmo.S_k = S_k
                 svmo.Vt_k = Vt_k
                 svmo.S_k_log = torch.log(S_k + 1e-8)
+
+                # Move modulation MLP parameters to GPU
+                if hasattr(svmo, 'modulation') and device.type == 'cuda':
+                    svmo.modulation.to(device)
             except Exception:
                 # If load fails, keep existing buffers (fallback)
                 pass
+
+        # Move STB parameters to GPU as well (outside the per-projection loop)
+        stb = getattr(layer, 'stb', None)
+        if stb is not None and device.type == 'cuda':
+            for buf_attr in ['U_k', 'Vt_k']:
+                buf = getattr(stb, buf_attr, None)
+                if buf is not None and buf.device.type == 'cpu':
+                    setattr(stb, buf_attr, buf.to(device))
 
     def _move_svd_to_cpu(self, layer):
         """Move SVD buffers back to CPU."""
         for name, buf in layer.named_buffers():
             if name.startswith("U_k") or name.startswith("Vt_k") or name.startswith("S_k"):
                 setattr(layer, name, buf.to(self._cpu_device))
+        # Also move modulation MLP and STB back to CPU
+        for attr_name in ["svmo_q", "svmo_k_proj", "svmo_v", "svmo_o",
+                           "svmo_up", "svmo_gate", "svmo_down"]:
+            svmo = getattr(layer, attr_name, None)
+            if svmo is not None and hasattr(svmo, 'modulation'):
+                svmo.modulation.to(self._cpu_device)
+        stb = getattr(layer, 'stb', None)
+        if stb is not None:
+            for buf_attr in ['U_k', 'Vt_k']:
+                buf = getattr(stb, buf_attr, None)
+                if buf is not None:
+                    setattr(stb, buf_attr, buf.to(self._cpu_device))
 
 
     def _forward_layer(
@@ -510,6 +550,10 @@ class FrugalTrainer:
     ) -> torch.Tensor:
         layer = self.layers[layer_idx]
         self._move_layer_weights_to_gpu(layer_idx)
+
+        # Comprehensively ensure the entire layer is on GPU (catches any missed submodules)
+        if self._gpu_device.type == 'cuda':
+            layer = layer.to(self._gpu_device, non_blocking=True)
 
         # Update S3-OPT context with current layer's SVD factors
         self.s3_opt.update_layer_context(layer)
@@ -523,18 +567,25 @@ class FrugalTrainer:
         if self.s3_opt.cfg.tows and self.s3_opt._tows_h_prev is not None:
             hidden_states = self.s3_opt.warmstart_forward(hidden_states, layer_idx)
 
-        with torch.cuda.amp.autocast(enabled=self._amp_enabled, dtype=self.config.amp_dtype):
+        # Defensive: guarantee 3D [B, S, D] before calling the layer
+        if hidden_states.dim() == 2:
+            hidden_states = hidden_states.unsqueeze(0)
+        elif hidden_states.dim() == 1:
+            hidden_states = hidden_states.unsqueeze(0).unsqueeze(0)
+
+        with torch.amp.autocast("cuda", enabled=self._amp_enabled, dtype=self.config.amp_dtype):
             if self.config.use_gradient_checkpointing and self.training:
                 from torch.utils.checkpoint import checkpoint
                 hidden_states.requires_grad_(True)
-                outputs = checkpoint(
+                chk_out = checkpoint(
                     layer, hidden_states, nmf_N_steps=nmf_N_steps,
                     use_reentrant=False,
+                    preserve_rng_state=False,
                 )
-                hidden_states = outputs[0]
+                hidden_states = chk_out[0] if isinstance(chk_out, tuple) else chk_out
             else:
-                outputs = layer(hidden_states, nmf_N_steps=nmf_N_steps)
-                hidden_states = outputs[0]
+                layer_out = layer(hidden_states, nmf_N_steps=nmf_N_steps)
+                hidden_states = layer_out[0] if isinstance(layer_out, tuple) else layer_out
 
         # SGC: Attach gradient hook for spectral compression (Theorem 8)
         if self.config.use_sgc and self.sgc is not None and hasattr(layer, 'svmo_q'):
@@ -565,13 +616,14 @@ class FrugalTrainer:
         
         hidden_states.requires_grad_(True)
         with torch.enable_grad():
-            with torch.cuda.amp.autocast(enabled=self._amp_enabled, dtype=self.config.amp_dtype):
-                outputs = self.layers[layer_idx](hidden_states)
+            with torch.amp.autocast("cuda", enabled=self._amp_enabled, dtype=self.config.amp_dtype):
+                layer_out = self.layers[layer_idx](hidden_states)
 
-            self._scaler.scale(outputs[0]).backward(gradient=grad_in, retain_graph=False)
+            layer_out_tensor = layer_out[0] if isinstance(layer_out, tuple) else layer_out
+            self._scaler.scale(layer_out_tensor).backward(gradient=grad_in, retain_graph=False)
 
         self._move_layer_weights_to_cpu(layer_idx)
-        del hidden_states, outputs
+        del hidden_states
 
     def _warmup_scheduler_step(self, step: int, seq_len: int = None):
         """Update learning rate with cosine schedule + warmup.
@@ -624,7 +676,7 @@ class FrugalTrainer:
         input_ids = input_ids.to(self._gpu_device)
         target_ids = target_ids.to(self._gpu_device)
 
-        with torch.cuda.amp.autocast(enabled=self._amp_enabled, dtype=self.config.amp_dtype):
+        with torch.amp.autocast("cuda", enabled=self._amp_enabled, dtype=self.config.amp_dtype):
             hidden_states = self.embedding(input_ids).unsqueeze(0)
 
         checkpoints: List[LayerCheckpoint] = []
@@ -633,18 +685,33 @@ class FrugalTrainer:
             hidden_states = self._forward_layer(layer_idx, hidden_states)
             checkpoints.append(LayerCheckpoint(hidden_states, layer_idx))
 
-        with torch.cuda.amp.autocast(enabled=self._amp_enabled, dtype=self.config.amp_dtype):
-            logits = self.lm_head(hidden_states)
+        with torch.amp.autocast("cuda", enabled=self._amp_enabled, dtype=self.config.amp_dtype):
+            logits = F.linear(
+                hidden_states.to("cpu", non_blocking=True),
+                self._lm_head_weight,
+                self._lm_head_bias,
+            ).to(hidden_states.device, non_blocking=True)
             loss = torch.nn.functional.cross_entropy(
                 logits.squeeze(0), target_ids.squeeze(0)
             )
 
         loss_scaled = loss / self.config.gradient_accumulation_steps
-        hidden_states.retain_grad()
-        self._scaler.scale(loss_scaled).backward(retain_graph=False)
 
-        grad_current = hidden_states.grad.detach().clone()
-        del logits, loss
+        # Compute gradient w.r.t. hidden_states ONLY through logits path (not 28-layer graph)
+        # to avoid CPU tensors in the 28-layer computation graph
+        hidden_states_detached = hidden_states.detach().requires_grad_(True)
+        logits_detached = F.linear(
+            hidden_states_detached.to("cpu", non_blocking=True),
+            self._lm_head_weight,
+            self._lm_head_bias,
+        ).to(hidden_states.device, non_blocking=True)
+        loss_detached = torch.nn.functional.cross_entropy(
+            logits_detached.squeeze(0), target_ids.squeeze(0)
+        )
+        loss_detached_scaled = loss_detached / self.config.gradient_accumulation_steps
+        grad_current = torch.autograd.grad(loss_detached_scaled, hidden_states_detached)[0]
+
+        del logits, loss, logits_detached, loss_detached, hidden_states_detached
 
         for layer_idx in reversed(range(self.n_layers)):
             # FDGD: filter gradient in frequency domain
@@ -690,14 +757,18 @@ class FrugalTrainer:
 
         self._clear_gpu_cache()
 
-        with torch.cuda.amp.autocast(enabled=self._amp_enabled, dtype=self.config.amp_dtype):
+        with torch.amp.autocast("cuda", enabled=self._amp_enabled, dtype=self.config.amp_dtype):
             hidden_states = self.embedding(inputs)
 
         for layer_idx in range(self.n_layers):
             hidden_states = self._forward_layer(layer_idx, hidden_states)
 
-        with torch.cuda.amp.autocast(enabled=self._amp_enabled, dtype=self.config.amp_dtype):
-            logits = self.lm_head(hidden_states)
+        with torch.amp.autocast("cuda", enabled=self._amp_enabled, dtype=self.config.amp_dtype):
+            logits = F.linear(
+                hidden_states.to("cpu", non_blocking=True),
+                self._lm_head_weight,
+                self._lm_head_bias,
+            ).to(hidden_states.device, non_blocking=True)
             loss = torch.nn.functional.cross_entropy(
                 logits.reshape(-1, logits.size(-1)),
                 labels.reshape(-1),

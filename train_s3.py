@@ -90,7 +90,8 @@ def build_s3_model(
     print(f"[S3] Found {n_layers} transformer layers")
 
     for i, block in enumerate(transformer_blocks):
-        block = block.to(cpu_device)
+        # Use to_empty to handle blocks with meta-device weights (offloaded by accelerate)
+        block.to_empty(device=cpu_device)
         for param in block.parameters():
             param.requires_grad = False
 
@@ -157,6 +158,28 @@ def build_s3_model(
             warmup_ratio=train_cfg["warmup_ratio"],
             max_grad_norm=train_cfg["max_grad_norm"],
             use_amp=train_cfg.get("use_amp", True),
+            amp_dtype=getattr(torch, {"fp16": "float16", "bf16": "bfloat16", "fp32": "float32"}.get(str(train_cfg.get("amp_dtype", "fp16")), train_cfg.get("amp_dtype", "fp16"))),
+            layer_swap=train_cfg.get("layer_swap", False),
+            token_by_token=train_cfg.get("token_by_token", False),
+            vram_budget_mb=train_cfg.get("vram_budget_mb", 4096),
+            svd_dir=config["model"].get("svd_dir", "./svd_factors/"),
+            svd_storage=train_cfg.get("svd_storage", "mmap"),
+            base_model_offload=train_cfg.get("base_model_offload", False),
+            base_model_offload_dir=train_cfg.get("base_model_offload_dir", "/tmp/s3_offload"),
+            dataset_streaming=train_cfg.get("dataset_streaming", False),
+            cpu_ram_budget_gb=train_cfg.get("cpu_ram_budget_gb", 10.0),
+            model_quantization=train_cfg.get("model_quantization", "none"),
+            # FASE 5: 70B support fields
+            quant_compute_dtype=getattr(torch, {"fp16": "float16", "bf16": "bfloat16", "fp32": "float32"}.get(str(train_cfg.get("quant_compute_dtype", "float16")), train_cfg.get("quant_compute_dtype", "float16"))),
+            quant_double_quant=train_cfg.get("quant_double_quant", True),
+            quant_quant_type=train_cfg.get("quant_type", "nf4"),
+            fsdp_enabled=train_cfg.get("fsdp_enabled", False),
+            fsdp_world_size=train_cfg.get("fsdp_world_size", 1),
+            fsdp_sharding_strategy=train_cfg.get("fsdp_sharding_strategy", "shard_grad"),
+            cpu_offload_params=train_cfg.get("cpu_offload_params", False),
+            cpu_offload_optims=train_cfg.get("cpu_offload_optims", False),
+            use_gradient_checkpointing=train_cfg.get("use_gradient_checkpointing", False),
+            # S3-OPT flags
             use_smv=s3_opt.get("use_smv", True),
             use_emp=s3_opt.get("use_emp", True),
             use_ter=s3_opt.get("use_ter", True),
@@ -251,7 +274,10 @@ def main():
 
     # FASE 1: Use accelerate for hardware-adaptive model offloading
     model_name = config["model"]["name"]
-    dtype = getattr(torch, config["model"]["dtype"])
+    # Map YAML dtype strings to torch dtypes: fp16→float16, bf16→bfloat16, fp32→float32
+    dtype_map = {"fp16": "float16", "bf16": "bfloat16", "fp32": "float32"}
+    dtype_str = config["model"].get("dtype", "fp16")
+    dtype = getattr(torch, dtype_map.get(dtype_str, dtype_str))
     
     # Build max_memory dict from config (if provided)
     max_memory = None
@@ -272,21 +298,27 @@ def main():
         print(f"[S³] CPU-only mode: max_memory={max_memory}")
 
     # FASE 5: 4-bit quantization for 70B models
-    quantization = config["model"].get("quantization", "none")
+    # Read from training.model_quantization (YAML structure) or model.quantization (alternative)
+    quantization = config["training"].get("model_quantization", config["model"].get("quantization", "none"))
     quant_config = None
     if quantization == "4bit":
         from transformers import BitsAndBytesConfig
+        dtype_map_q = {"fp16": "float16", "bf16": "bfloat16", "fp32": "float32"}
+        quant_dtype_str = config["training"].get("quant_compute_dtype", config["model"].get("quant_compute_dtype", "bfloat16"))
         quant_config = BitsAndBytesConfig(
             load_in_4bit=True,
-            bnb_4bit_compute_dtype=getattr(torch, config["model"].get("quant_compute_dtype", "bfloat16")),
-            bnb_4bit_use_double_quant=config["model"].get("quant_double_quant", True),
-            bnb_4bit_quant_type=config["model"].get("quant_type", "nf4"),
+            bnb_4bit_compute_dtype=getattr(torch, dtype_map_q.get(quant_dtype_str, quant_dtype_str)),
+            bnb_4bit_use_double_quant=config["training"].get("quant_double_quant", config["model"].get("quant_double_quant", True)),
+            bnb_4bit_quant_type=config["training"].get("quant_type", config["model"].get("quant_type", "nf4")),
         )
-        print(f"[S³] 4-bit NF4 quantization enabled (compute_dtype={config['model'].get('quant_compute_dtype', 'bfloat16')})")
+        print(f"[S³] 4-bit NF4 quantization enabled (compute_dtype={quant_dtype_str})")
     elif quantization == "8bit":
         from transformers import BitsAndBytesConfig
-        quant_config = BitsAndBytesConfig(load_in_8bit=True)
-        print("[S³] 8-bit quantization enabled")
+        quant_config = BitsAndBytesConfig(
+            load_in_8bit=True,
+            llm_int8_enable_fp32_cpu_offload=True,
+        )
+        print("[S³] 8-bit quantization enabled with CPU offload")
 
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,

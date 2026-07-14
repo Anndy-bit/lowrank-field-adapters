@@ -19,6 +19,7 @@ Referencias: formalismo_optimizacion.md (S³-OPT, Julio 2026)
 
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 from typing import Optional, List, Tuple, Callable
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
@@ -535,9 +536,17 @@ class FDGDFilter:
         P = g.numel()
         g_flat = g.flatten()
 
+        # Pad to next power of 2 for cuFFT compatibility in fp16
+        P_fft = 2 ** (P - 1).bit_length()
+        if P_fft != P:
+            g_flat = F.pad(g_flat, (0, P_fft - P))
+            pad_warned = True
+        else:
+            pad_warned = False
+
         # FFT
         g_fft = torch.fft.fft(g_flat)
-        freqs = torch.fft.fftfreq(P)
+        freqs = torch.fft.fftfreq(P_fft, device=g_flat.device)
 
         # Filter response (simétrico)
         omega_abs = torch.abs(freqs)
@@ -549,8 +558,12 @@ class FDGDFilter:
         # IFFT
         g_filtered = torch.fft.ifft(g_fft_filtered).real
 
+        # Trim back to original size
+        if pad_warned:
+            g_filtered = g_filtered[:P]
+
         # Guardar energía para adaptividad
-        energy = torch.norm(g_filtered).item() / (torch.norm(g_flat).item() + 1e-8)
+        energy = torch.norm(g_filtered).item() / (torch.norm(g_flat[:P]).item() + 1e-8)
         self._energy_history.append(energy)
         if len(self._energy_history) > 100:
             self._energy_history.pop(0)

@@ -11,7 +11,7 @@ model:
   name: Qwen/Qwen2.5-7B-Instruct
   dtype: fp16
   max_seq_length: 512
-  svd_dir: ./svd_factors/qwen2.5-7b/
+  svd_dir: ./svd_factors/
   # FASE 1: Memory management
   offload_folder: /tmp/s3_offload
 
@@ -47,7 +47,7 @@ training:
   base_model_offload_dir: /tmp/s3_offload
   dataset_streaming: true       # 0 RAM for data
   cpu_ram_budget_gb: 10.0       # Hard limit CPU RAM
-  model_quantization: none
+  model_quantization: 8bit
 
 data:
   dataset: alpaca
