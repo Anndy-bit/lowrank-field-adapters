@@ -66,8 +66,12 @@
 
 \title{\usf{}: Ajuste Fino por Streaming de Unidades con Gradientes\\ Exactos en GPUs de Consumo}
 
-\author{Autor(es) Anónimo(s)%
-\thanks{Manuscrito preparado en julio de 2026. Todos los experimentos se realizaron en un único
+% Bloque de autor: se deja SIN autor a propósito. Descomentar y rellenar antes del envío final.
+% \author{Nombre Apellido%
+% \thanks{Afiliación, ciudad, país. Correo: usuario@dominio.}%
+% \thanks{Manuscrito preparado en julio de 2026. Todos los experimentos se realizaron en un único
+% equipo de escritorio con una NVIDIA GTX~1050 (3,94\,GB).}}
+\author{\thanks{Manuscrito preparado en julio de 2026. Todos los experimentos se realizaron en un único
 equipo de escritorio con una NVIDIA GTX~1050 (3,94\,GB).}}
 
 \maketitle
@@ -746,6 +750,14 @@ Transformers~\cite{wolf2020transformers}. Se emplean dos adaptadores para sustan
 espectral-espacial-suave descrito en un artículo complementario. Este trabajo no formula
 afirmación alguna sobre la calidad relativa de ambos; aparecen aquí como evidencia de que \usf{} es
 indiferente a esa elección.
+
+La implementación, las configuraciones de los experimentos y los registros en bruto que respaldan
+cada número de este artículo están disponibles en una revisión etiquetada e
+inmutable~\cite{usfcode}: el desarrollo del método continúa en otro punto de ese repositorio, pero
+la etiqueta fija el código exacto que produjo las mediciones aquí reportadas. Cada afirmación de
+exactitud de la \Cref{tab:exact} se corresponde con un test ejecutable, y las figuras se regeneran
+desde la ejecución registrada en lugar de redibujarse, de modo que las desviaciones reportadas
+pueden reproducirse y no exigen confianza.
 
 \subsection{Exactitud}
 

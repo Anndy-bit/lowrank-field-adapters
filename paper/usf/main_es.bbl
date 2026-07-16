@@ -163,4 +163,11 @@ A.~Paszke, S.~Gross, F.~Massa, A.~Lerer, J.~Bradbury, G.~Chanan \emph{et~al.},
   ``{PyTorch}: An imperative style, high-performance deep learning library,''
   in \emph{Advances in Neural Information Processing Systems (NeurIPS)}, 2019.
 
+\bibitem{usfcode}
+``{USF}: Reference implementation of unit-streamed fine-tuning,''
+  \url{https://github.com/Anndy-bit/lowrank-field-adapters/tree/v1.0-usf-paper1},
+  2026, source code, experiment configurations and run logs. Tagged release
+  \texttt{v1.0-usf-paper1} (commit \texttt{9a86aed}): the exact revision that
+  produced every measurement reported here.
+
 \end{thebibliography}

@@ -153,16 +153,20 @@
   howpublished = {\url{https://github.com/huggingface/accelerate}}
 }
 
-%% NOTA: esta entrada identifica al autor. Si el envío es de revisión ciega, sustituir la URL por
-%% un espejo anonimizado (p. ej. anonymous.4open.science) y restaurarla en la versión final.
-%% Requiere que el código de USF esté publicado en esa URL: a 2026-07-16 la rama
-%% feat/streaming-formalism es solo local y el remoto no contiene nada de USF.
+%% NOTA 1: la URL identifica al autor. Si el envío es de revisión ciega, sustituir por un espejo
+%% anonimizado (p. ej. anonymous.4open.science) y restaurarla en la versión final. El campo author
+%% se omite a propósito, en coherencia con el bloque de autor del .tex.
+%% NOTA 2: la URL apunta al TAG v1.0-usf-paper1 (commit 9a86aed), no a una rama ni a la raíz del
+%% repo. Un tag es inmutable: garantiza que el revisor vea exactamente el código que produjo estos
+%% números, aunque el algoritmo siga evolucionando en feat/streaming-formalism. La rama por defecto
+%% (master) no contiene USF a 2026-07-16; recibirá el consolidado más adelante.
 @misc{usfcode,
   title  = {{USF}: Reference Implementation of Unit-Streamed Fine-Tuning},
-  author = {{Anonymous Author(s)}},
   year   = {2026},
-  note   = {Source code, experiment configurations and run logs},
-  howpublished = {\url{https://github.com/Anndy-bit/lowrank-field-adapters}}
+  note   = {Source code, experiment configurations and run logs. Tagged release
+            \texttt{v1.0-usf-paper1} (commit \texttt{9a86aed}): the exact revision that produced
+            every measurement reported here},
+  howpublished = {\url{https://github.com/Anndy-bit/lowrank-field-adapters/tree/v1.0-usf-paper1}}
 }
 
 @inproceedings{wolf2020transformers,

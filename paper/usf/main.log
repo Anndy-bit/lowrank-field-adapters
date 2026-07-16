@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.7.5)  16 JUL 2026 13:58
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.7.5)  16 JUL 2026 14:16
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -829,19 +829,19 @@ Package hyperref Info: Link coloring OFF on input line 41.
 \@outlinefile=\write4
 \openout4 = `main.out'.
 
-LaTeX Font Info:    Trying to load font information for U+msa on input line 57.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 61.
 
 
 (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 57.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 61.
 
 
 (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
-Underfull \hbox (badness 10000) in paragraph at lines 76--79
+Underfull \hbox (badness 10000) in paragraph at lines 80--83
 []\OT1/ptm/b/it/9 Index Terms\OT1/ptm/b/n/9 ---Parameter-efficient fine-tuning,
  memory-
  []
@@ -852,53 +852,53 @@ dist/fonts/enc/dvips/base/8r.enc}
 
 ]
 LaTeX Font Info:    Trying to load font information for OT1+pcr on input line 1
-95.
+99.
 
 (/usr/share/texlive/texmf-dist/tex/latex/psnfss/ot1pcr.fd
 File: ot1pcr.fd 2001/06/04 font definitions for OT1/pcr.
 )
-Underfull \hbox (badness 1584) in paragraph at lines 205--213
+Underfull \hbox (badness 1584) in paragraph at lines 209--217
 \OT1/ptm/m/n/10 re-or-gan-is-ing a com-pu-ta-tion around its mem-ory traffic---
 
  []
 
 
 LaTeX Font Warning: Font shape `OT1/ptm/m/scit' undefined
-(Font)              using `OT1/ptm/m/sc' instead on input line 243.
+(Font)              using `OT1/ptm/m/sc' instead on input line 247.
 
 
 LaTeX Font Warning: Font shape `OT1/ptm/m/scit' undefined
-(Font)              using `OT1/ptm/m/sc' instead on input line 244.
+(Font)              using `OT1/ptm/m/sc' instead on input line 248.
 
 
 LaTeX Font Warning: Font shape `OT1/ptm/m/scit' undefined
-(Font)              using `OT1/ptm/m/sc' instead on input line 245.
+(Font)              using `OT1/ptm/m/sc' instead on input line 249.
 
 
 LaTeX Font Warning: Font shape `OT1/ptm/m/scit' undefined
-(Font)              using `OT1/ptm/m/sc' instead on input line 246.
+(Font)              using `OT1/ptm/m/sc' instead on input line 250.
 
 [2]
 Package hyperref Info: bookmark level for unknown algorithm defaults to 0 on in
-put line 254.
+put line 258.
 
 
 LaTeX Font Warning: Font shape `OT1/ptm/m/scit' undefined
-(Font)              using `OT1/ptm/m/sc' instead on input line 329.
+(Font)              using `OT1/ptm/m/sc' instead on input line 333.
 
 
-Overfull \hbox (11.06604pt too wide) detected at line 350
+Overfull \hbox (11.06604pt too wide) detected at line 354
 [][][][][]  \OMS/cmsy/m/n/10 ^^T  []  \OT1/cmr/m/n/10 +  []  +  []  +  []\OML/c
 mm/m/it/10 ;
  []
 
 [3]
-Overfull \hbox (5.60245pt too wide) in paragraph at lines 436--447
+Overfull \hbox (5.60245pt too wide) in paragraph at lines 440--451
  [][] 
  []
 
 
-Overfull \hbox (17.32733pt too wide) detected at line 542
+Overfull \hbox (17.32733pt too wide) detected at line 546
 [][][][][] \OT1/cmr/m/n/10 = 2 [] \OMS/cmsy/m/n/10 j\OML/cmm/m/it/10 W[]\OMS/cm
 sy/m/n/10 j [] [][] \OT1/cmr/m/n/10 = \OML/cmm/m/it/10 G \OMS/cmsy/m/n/10 ^^A \
 OT1/cmr/m/n/10 2 [] \OMS/cmsy/m/n/10 j\OML/cmm/m/it/10 W[]\OMS/cmsy/m/n/10 j\OM
@@ -906,7 +906,7 @@ L/cmm/m/it/10 ;
  []
 
 
-Underfull \hbox (badness 5374) in paragraph at lines 547--553
+Underfull \hbox (badness 5374) in paragraph at lines 551--557
  \OT1/ptm/m/it/10 Proof: Ex-act-ness. \OT1/ptm/m/n/10 Gra-di-ent ac-cu-mu-la-ti
 on com-putes
  []
@@ -914,53 +914,53 @@ on com-putes
 [4]
 
 LaTeX Font Warning: Font shape `OT1/ptm/m/scit' undefined
-(Font)              using `OT1/ptm/m/sc' instead on input line 589.
+(Font)              using `OT1/ptm/m/sc' instead on input line 593.
 
 
-Underfull \hbox (badness 1436) in paragraph at lines 681--687
+Underfull \hbox (badness 1436) in paragraph at lines 685--691
 \OT1/ptm/m/n/10 The sys-tem reads the ar-chi-tec-ture de-scrip-tion, com-putes
  []
 
 [5]
 
 LaTeX Font Warning: Font shape `OT1/ptm/m/scit' undefined
-(Font)              using `OT1/ptm/m/it' instead on input line 752.
+(Font)              using `OT1/ptm/m/it' instead on input line 763.
 
 
 LaTeX Font Warning: Font shape `OT1/ptm/m/scit' undefined
-(Font)              using `OT1/ptm/m/it' instead on input line 752.
+(Font)              using `OT1/ptm/m/it' instead on input line 763.
 
 
 LaTeX Font Warning: Font shape `OT1/ptm/m/scit' undefined
-(Font)              using `OT1/ptm/m/it' instead on input line 752.
+(Font)              using `OT1/ptm/m/it' instead on input line 763.
 
-<figures/vram_trace.pdf, id=362, 235.87372pt x 156.76768pt>
+<figures/vram_trace.pdf, id=369, 235.87372pt x 156.76768pt>
 File: figures/vram_trace.pdf Graphic file (type pdf)
 <use figures/vram_trace.pdf>
-Package pdftex.def Info: figures/vram_trace.pdf  used on input line 800.
+Package pdftex.def Info: figures/vram_trace.pdf  used on input line 811.
 (pdftex.def)             Requested size: 252.0pt x 167.49336pt.
-<figures/loss_curve.pdf, id=367, 222.46425pt x 143.0665pt>
+<figures/loss_curve.pdf, id=374, 222.46425pt x 143.0665pt>
 File: figures/loss_curve.pdf Graphic file (type pdf)
 <use figures/loss_curve.pdf>
-Package pdftex.def Info: figures/loss_curve.pdf  used on input line 811.
+Package pdftex.def Info: figures/loss_curve.pdf  used on input line 822.
 (pdftex.def)             Requested size: 252.0pt x 162.0671pt.
 [6 <./figures/vram_trace.pdf>]
-Underfull \hbox (badness 10000) in paragraph at lines 881--881
+Underfull \hbox (badness 10000) in paragraph at lines 892--892
 []\OT1/ptm/m/n/8 Executed: 2.2GB peak, ppl
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 886--886
+Underfull \hbox (badness 10000) in paragraph at lines 897--897
 []\OT1/ptm/m/n/8 Llama-3-
  []
 
 
-Underfull \hbox (badness 6063) in paragraph at lines 887--887
+Underfull \hbox (badness 6063) in paragraph at lines 898--898
 []\OT1/ptm/b/n/8 Theoretical; re-
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 888--889
+Underfull \hbox (badness 10000) in paragraph at lines 899--900
 []\OT1/ptm/m/n/8 Needs ma-trix gran-u-lar-ity
  []
 
@@ -968,6 +968,12 @@ Underfull \hbox (badness 10000) in paragraph at lines 888--889
 Underfull \hbox (badness 10000) in paragraph at lines 144--146
 []\OT1/ptm/m/n/8 Qwen Team, ``Qwen2.5 tech-ni-cal re-port,'' \OT1/ptm/m/it/8 ar
 Xiv preprint
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 167--172
+\OT1/ptm/m/n/8 / / github . com / Anndy-[]bit / lowrank-[]^^Leld-[]adapters / t
+ree / v1 . 0-[]usf-[]paper1$[],
  []
 
 ) [8] (./main.aux)
@@ -979,11 +985,11 @@ Package rerunfilecheck Info: File `main.out' has not changed.
 (rerunfilecheck)             Checksum: 0BE2348F2FC258B94910A1DCA10986F0;2861.
  ) 
 Here is how much of TeX's memory you used:
- 25053 strings out of 474222
- 470884 string characters out of 5748734
- 1961975 words of memory out of 5000000
- 46789 multiletter control sequences out of 15000+600000
- 608799 words of font info for 132 fonts, out of 8000000 for 9000
+ 25056 strings out of 474222
+ 470918 string characters out of 5748734
+ 1962975 words of memory out of 5000000
+ 46791 multiletter control sequences out of 15000+600000
+ 608236 words of font info for 133 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  84i,12n,87p,782b,791s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx8.pfb></usr
@@ -1006,10 +1012,10 @@ pe1/urw/courier/ucrr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times
 /utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmbi8a.pfb></
 usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texli
 ve/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (8 pages, 378225 bytes).
+Output written on main.pdf (8 pages, 382909 bytes).
 PDF statistics:
- 607 PDF objects out of 1000 (max. 8388607)
- 482 compressed objects within 5 object streams
- 118 named destinations out of 1000 (max. 500000)
+ 612 PDF objects out of 1000 (max. 8388607)
+ 487 compressed objects within 5 object streams
+ 119 named destinations out of 1000 (max. 500000)
  215 words of extra memory for PDF output out of 10000 (max. 10000000)
 

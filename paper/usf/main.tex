@@ -43,8 +43,12 @@
 \title{\usf{}: Unit-Streamed Fine-Tuning of Large Language\\ Models with Exact Gradients on
 Consumer GPUs}
 
-\author{Anonymous Author(s)%
-\thanks{Manuscript prepared July 2026. All experiments were carried out on a single
+% Bloque de autor: se deja SIN autor a propósito. Descomentar y rellenar antes del envío final.
+% \author{Nombre Apellido%
+% \thanks{Afiliación, ciudad, país. Correo: usuario@dominio.}%
+% \thanks{Manuscript prepared July 2026. All experiments were carried out on a single
+% NVIDIA GTX~1050 (3.94\,GB) desktop machine.}}
+\author{\thanks{Manuscript prepared July 2026. All experiments were carried out on a single
 NVIDIA GTX~1050 (3.94\,GB) desktop machine.}}
 
 \maketitle
@@ -701,6 +705,13 @@ Transformers~\cite{wolf2020transformers}. Two adapters are used to substantiate
 spectral--spatial--smooth adapter described in a companion paper. This work makes no claim about
 the relative quality of the two; they appear here as evidence that \usf{} is indifferent to the
 choice.
+
+The implementation, the experiment configurations and the raw logs behind every number in this
+paper are available at a tagged, immutable revision~\cite{usfcode}: development of the method
+continues elsewhere in that repository, but the tag pins the exact code that produced the
+measurements reported here. Each exactness claim in \Cref{tab:exact} corresponds to an executable
+test, and the figures are regenerated from the logged run rather than redrawn, so the reported
+deviations can be reproduced rather than taken on trust.
 
 \subsection{Exactness}
 

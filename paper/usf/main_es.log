@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.7.5)  16 JUL 2026 13:58
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.7.5)  16 JUL 2026 14:16
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -867,13 +867,13 @@ Package hyperref Info: Link coloring OFF on input line 65.
 \@outlinefile=\write4
 \openout4 = `main_es.out'.
 
-LaTeX Font Info:    Trying to load font information for U+msa on input line 81.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 85.
 
 
 (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 81.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 85.
 
 
 (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsb.fd
@@ -883,48 +883,50 @@ f-dist/fonts/enc/dvips/base/8r.enc}
 
 
 ]
-LaTeX Font Info:    Trying to load font information for T1+pcr on input line 22
-7.
+LaTeX Font Info:    Trying to load font information for T1+pcr on input line 23
+1.
  (/usr/share/texlive/texmf-dist/tex/latex/psnfss/t1pcr.fd
 File: t1pcr.fd 2001/06/04 font definitions for T1/pcr.
 )
-[2]
+Underfull \vbox (badness 10000) has occurred while \output is active []
+
+ [2]
 
 LaTeX Font Warning: Font shape `T1/ptm/m/scit' undefined
-(Font)              using `T1/ptm/m/sc' instead on input line 276.
-
-
-LaTeX Font Warning: Font shape `T1/ptm/m/scit' undefined
-(Font)              using `T1/ptm/m/sc' instead on input line 277.
+(Font)              using `T1/ptm/m/sc' instead on input line 280.
 
 
 LaTeX Font Warning: Font shape `T1/ptm/m/scit' undefined
-(Font)              using `T1/ptm/m/sc' instead on input line 279.
+(Font)              using `T1/ptm/m/sc' instead on input line 281.
 
 
 LaTeX Font Warning: Font shape `T1/ptm/m/scit' undefined
-(Font)              using `T1/ptm/m/sc' instead on input line 279.
+(Font)              using `T1/ptm/m/sc' instead on input line 283.
+
+
+LaTeX Font Warning: Font shape `T1/ptm/m/scit' undefined
+(Font)              using `T1/ptm/m/sc' instead on input line 283.
 
 Package hyperref Info: bookmark level for unknown algorithm defaults to 0 on in
-put line 287.
+put line 291.
 
-Underfull \hbox (badness 4060) in paragraph at lines 325--326
+Underfull \hbox (badness 4060) in paragraph at lines 329--330
  \T1/ptm/m/it/10 De-mos-tra-ción: \T1/ptm/m/n/10 La di-fe-ren-cia-ción en mo-do
  in-ver-so
  []
 
 
 LaTeX Font Warning: Font shape `T1/ptm/m/scit' undefined
-(Font)              using `T1/ptm/m/sc' instead on input line 367.
+(Font)              using `T1/ptm/m/sc' instead on input line 371.
 
 
-Overfull \hbox (17.03139pt too wide) detected at line 389
+Overfull \hbox (17.03139pt too wide) detected at line 393
 [][][][][]  \OMS/cmsy/m/n/10 ^^T  []  \OT1/cmr/m/n/10 +  []  +  []  +  []\OML/c
 mm/m/it/10 ;
  []
 
 [3]
-Underfull \hbox (badness 1540) in paragraph at lines 395--402
+Underfull \hbox (badness 1540) in paragraph at lines 399--406
 \T1/ptm/m/n/10 exac-ta-men-te una uni-dad car-ga-da, da-do que $[]$ y
  []
 
@@ -934,58 +936,58 @@ Underfull \vbox (badness 1087) has occurred while \output is active []
  [4]
 
 LaTeX Font Warning: Font shape `T1/ptm/m/scit' undefined
-(Font)              using `T1/ptm/m/sc' instead on input line 625.
+(Font)              using `T1/ptm/m/sc' instead on input line 629.
 
 [5]
-Overfull \hbox (19.80057pt too wide) in paragraph at lines 762--773
+Overfull \hbox (19.80057pt too wide) in paragraph at lines 774--785
  [][] 
  []
 
 
 LaTeX Font Warning: Font shape `T1/ptm/m/scit' undefined
-(Font)              using `T1/ptm/m/it' instead on input line 798.
+(Font)              using `T1/ptm/m/it' instead on input line 810.
 
 
 LaTeX Font Warning: Font shape `T1/ptm/m/scit' undefined
-(Font)              using `T1/ptm/m/it' instead on input line 798.
+(Font)              using `T1/ptm/m/it' instead on input line 810.
 
 
 LaTeX Font Warning: Font shape `T1/ptm/m/scit' undefined
-(Font)              using `T1/ptm/m/it' instead on input line 798.
+(Font)              using `T1/ptm/m/it' instead on input line 810.
 
 [6]
-<figures/es/vram_trace.pdf, id=373, 235.87372pt x 156.76768pt>
+<figures/es/vram_trace.pdf, id=376, 235.87372pt x 156.76768pt>
 File: figures/es/vram_trace.pdf Graphic file (type pdf)
 <use figures/es/vram_trace.pdf>
-Package pdftex.def Info: figures/es/vram_trace.pdf  used on input line 848.
+Package pdftex.def Info: figures/es/vram_trace.pdf  used on input line 860.
 (pdftex.def)             Requested size: 252.0pt x 167.49336pt.
-<figures/es/loss_curve.pdf, id=378, 222.7936pt x 143.0665pt>
+<figures/es/loss_curve.pdf, id=381, 222.7936pt x 143.0665pt>
 File: figures/es/loss_curve.pdf Graphic file (type pdf)
 <use figures/es/loss_curve.pdf>
-Package pdftex.def Info: figures/es/loss_curve.pdf  used on input line 861.
+Package pdftex.def Info: figures/es/loss_curve.pdf  used on input line 873.
 (pdftex.def)             Requested size: 252.0pt x 161.82915pt.
  [7 <./figures/es/vram_trace.pdf> <./figures/es/loss_curve.pdf>]
-Underfull \hbox (badness 10000) in paragraph at lines 934--934
+Underfull \hbox (badness 10000) in paragraph at lines 946--946
 []\T1/ptm/m/n/8 Llama-3-
  []
 
 
-Underfull \hbox (badness 2103) in paragraph at lines 936--937
+Underfull \hbox (badness 2103) in paragraph at lines 948--949
 \T1/ptm/m/n/8 una gra-nu-la-ri-dad \T1/ptm/m/it/8 im-ple-men-ta-da
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 938--938
+Underfull \hbox (badness 10000) in paragraph at lines 950--950
 []\T1/ptm/m/n/8 Llama-3-
  []
 
 
-Underfull \hbox (badness 1902) in paragraph at lines 940--941
+Underfull \hbox (badness 1902) in paragraph at lines 952--953
 []\T1/ptm/m/n/8 Precisa gra-nu-la-ri-dad de ma-triz
  []
 
 
-Underfull \hbox (badness 6493) in paragraph at lines 940--941
+Underfull \hbox (badness 6493) in paragraph at lines 952--953
 \T1/ptm/m/n/8 (1,62GB); véa-se la Ob-ser-va-
  []
 
@@ -993,6 +995,12 @@ Underfull \hbox (badness 6493) in paragraph at lines 940--941
 Underfull \hbox (badness 8094) in paragraph at lines 144--146
 []\T1/ptm/m/n/8 Qwen Team, ``Qwen2.5 tech-ni-cal re-port,'' \T1/ptm/m/it/8 ar-X
 iv pre-print ar-
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 167--172
+\T1/ptm/m/n/8 / / github . com / Anndy-[]bit / lowrank-[]^^\eld-[]adapters / tr
+ee / v1 . 0-[]usf-[]paper1$[],
  []
 
 ) [9
@@ -1009,11 +1017,11 @@ Package rerunfilecheck Info: File `main_es.out' has not changed.
 (rerunfilecheck)             Checksum: D98B82C8B5C99513A106DD4BD57E8D6D;3136.
  ) 
 Here is how much of TeX's memory you used:
- 26685 strings out of 474222
- 497512 string characters out of 5748734
+ 26688 strings out of 474222
+ 497545 string characters out of 5748734
  1961975 words of memory out of 5000000
- 48390 multiletter control sequences out of 15000+600000
- 697096 words of font info for 172 fonts, out of 8000000 for 9000
+ 48392 multiletter control sequences out of 15000+600000
+ 696639 words of font info for 173 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  84i,14n,87p,865b,789s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx8.pfb></usr
@@ -1036,10 +1044,10 @@ pe1/urw/courier/ucrr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times
 /utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmbi8a.pfb></
 usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texli
 ve/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main_es.pdf (9 pages, 383449 bytes).
+Output written on main_es.pdf (9 pages, 388213 bytes).
 PDF statistics:
- 611 PDF objects out of 1000 (max. 8388607)
- 486 compressed objects within 5 object streams
- 120 named destinations out of 1000 (max. 500000)
+ 617 PDF objects out of 1000 (max. 8388607)
+ 492 compressed objects within 5 object streams
+ 121 named destinations out of 1000 (max. 500000)
  215 words of extra memory for PDF output out of 10000 (max. 10000000)
 
