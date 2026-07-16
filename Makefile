@@ -61,15 +61,42 @@ svd: _ensure_venv
 		--output ./svd_factors/ \
 		--device cpu
 
-train: _ensure_venv
-	@echo "[Train] Starting frugal training..."
-	$(PYTHON) train_s3.py \
-		--config $(CONFIG) \
-		--device $(DEVICE)
+EPOCHS ?= 3
+MAXSEQ ?= 256
+LIMIT ?= 50
+BATCH ?= 1
 
-train-monitored: _ensure_venv
-	@echo "[Train+Monitor] Starting frugal training with FULL system monitoring..."
-	@echo "[Monitor] Logs: results/monitoring/"
+smoke: _ensure_venv
+	@echo "[Smoke] Self-testing the S³ pipeline on a tiny model (no download)..."
+	$(PYTHON) run_s3_train.py --smoke
+
+# Short real-data run on the GPU to confirm the loss actually drops (do this
+# BEFORE committing hours to the full run). LIMIT=50 examples by default.
+train-test: _ensure_venv
+	@echo "[Train-Test] Short S³ streaming run on $(LIMIT) real examples ($(DEVICE))..."
+	PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True $(PYTHON) run_s3_train.py \
+		--model $(MODEL) --svd_dir ./svd_factors --device $(DEVICE) \
+		--mode stream --epochs 1 --limit $(LIMIT) --max_seq $(MAXSEQ) --batch $(BATCH)
+
+train: _ensure_venv
+	@echo "[Train] Starting S³ streaming training (7B on <2GB VRAM)..."
+	PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True $(PYTHON) run_s3_train.py \
+		--model $(MODEL) --svd_dir ./svd_factors --device $(DEVICE) \
+		--mode stream --epochs $(EPOCHS) --limit $(LIMIT) --max_seq $(MAXSEQ) --batch $(BATCH)
+
+# RQ4 ablations: full / -STB / -NMF / SVMO-only / NMF-only, one comparison table.
+# ABLIMIT examples per variant (default 150), ABATCH=4. ~5.6h for 5 variants @ 150.
+ABLIMIT ?= 150
+ABATCH ?= 4
+ablations: _ensure_venv
+	@echo "[Ablations] Running operator ablations on $(ABLIMIT) examples each (batch=$(ABATCH))..."
+	PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True $(PYTHON) run_ablations.py \
+		--model $(MODEL) --svd_dir ./svd_factors --device $(DEVICE) \
+		--limit $(ABLIMIT) --max_seq $(MAXSEQ) --batch $(ABATCH)
+
+# Deprecated path kept for reference only (known-broken forward/backward).
+train-legacy: _ensure_venv
+	@echo "[Train] LEGACY frugal_trainer path (deprecated)..."
 	$(PYTHON) train_s3.py \
 		--config $(CONFIG) \
 		--device $(DEVICE)
