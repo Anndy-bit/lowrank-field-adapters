@@ -45,7 +45,6 @@ def test_identity_parity():
     delta = abs(base_loss - s3_loss)
     print(f"[parity] base={base_loss:.6f}  s3_init={s3_loss:.6f}  |Δ|={delta:.2e}")
     assert delta < 1e-3, f"identity parity FAILED: Δ={delta}"
-    return delta
 
 
 def test_learning():
@@ -77,14 +76,13 @@ def test_learning():
     print(f"[learning] loss {losses[0]:.4f} -> {losses[-1]:.4f}")
     assert torch.isfinite(torch.tensor(losses)).all(), "NaN/inf in loss"
     assert losses[-1] < losses[0] - 0.1, f"loss did not decrease: {losses[0]}->{losses[-1]}"
-    return losses[0], losses[-1]
 
 
 if __name__ == "__main__":
     print("=" * 60)
-    d = test_identity_parity()
+    test_identity_parity()
     print("PARITY: PASS")
     print("=" * 60)
-    l0, l1 = test_learning()
-    print("LEARNING: PASS" if l1 < l0 - 0.1 else "LEARNING: FAIL")
+    test_learning()
+    print("LEARNING: PASS")
     print("=" * 60)

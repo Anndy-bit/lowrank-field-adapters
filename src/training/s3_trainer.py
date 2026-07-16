@@ -42,6 +42,9 @@ class S3TrainConfig:
     amp: bool = True
     amp_dtype: torch.dtype = torch.float16
     log_interval: int = 10
+    # --- USF (formalismo_streaming.md) ---
+    layer_major: bool = False     # Thm 4: invert loops -> I/O divided by grad_accum_steps
+    ckpt_offload: bool = True     # Cor 2.1: checkpoints to CPU -> VRAM independent of depth
     # --- S3-OPT (formalismo_optimizacion) coupling ---
     # Only correctness-preserving optimizations are wired live. Others are
     # accepted and logged so both formalisms stay coupled without risking learning.
@@ -254,6 +257,91 @@ class S3Trainer:
             return False
         return blk.sbs_p >= 1.0 or (torch.rand(()) < blk.sbs_p)
 
+    # ---- streaming helpers (granularity + prefetch aware) -------------------
+    def _units(self, i):
+        """Streamable units of block i under the active granularity (Thm 3)."""
+        return self.frozen_streamer.units(i) if self.frozen_streamer is not None else []
+
+    def _load(self, blk, i, unit=None):
+        if self.frozen_streamer is not None:
+            self.frozen_streamer.load(blk, i, unit)
+
+    def _unload(self, blk, i, unit=None):
+        if self.frozen_streamer is not None:
+            self.frozen_streamer.unload(blk, i, unit)
+
+    def _prefetch(self, i, unit=None):
+        """Prop. 5: kick off the next unit's disk read while this one computes."""
+        if self.frozen_streamer is not None and hasattr(self.frozen_streamer, "prefetch"):
+            if 0 <= i < len(self.blocks):
+                self.frozen_streamer.prefetch(i, unit)
+
+    def _granularity(self):
+        return getattr(self.frozen_streamer, "granularity", "layer") if self.frozen_streamer else "layer"
+
+    def _segments(self):
+        """Streamable *segments* = (block_idx, unit, kind), in execution order.
+
+        'layer'    -> 1 segment/block (whole block).
+        'sublayer' -> 2 segments/block: attention | MLP, so peak VRAM becomes
+                      max(|W_attn|,|W_mlp|) instead of |W_layer| (Thm 3).
+
+        Finer than sublayer (per-matrix) would need reimplementing HF's attention
+        internals — q,k,v,o are consumed together inside `self_attn` — so it is
+        NOT supported here (see formalismo_streaming.md §5, limitation note).
+        """
+        g = self._granularity()
+        segs = []
+        for i in range(len(self.blocks)):
+            if g == "layer":
+                segs.append((i, None, "full"))
+            else:
+                segs.append((i, 0, "attn"))
+                segs.append((i, 1, "mlp"))
+        return segs
+
+    def _run_seg(self, seg, h, mask, pos_emb, stb_apply, nmf_N=None):
+        """Execute one segment. Composition over segments == blk.forward()."""
+        i, _unit, kind = seg
+        blk = self.blocks[i]
+        if kind == "full":
+            return blk(h, attention_mask=mask, position_embeddings=pos_emb,
+                       stb_apply=stb_apply, nmf_N_steps=nmf_N)
+        if kind == "attn":
+            return blk.forward_attn(h, attention_mask=mask, position_embeddings=pos_emb,
+                                    stb_apply=stb_apply, nmf_N_steps=nmf_N)
+        return blk.forward_mlp(h, nmf_N_steps=nmf_N)
+
+    def _run_unit(self, blk, i, h, mask, pos_emb, stb_apply, nmf_N=None, nxt=None):
+        """Run block `i` honouring the active granularity (Thm 3) + prefetch (Prop 5).
+
+        'layer'  -> load whole block, run, free.
+        'sublayer'/'matrix' -> load attention weights, run attn, free; then the
+        MLP weights, run mlp, free. Peak VRAM = max(|W_attn|,|W_mlp|).
+        Composition is identical to blk.forward(), so gradients are unchanged.
+        """
+        g = self._granularity()
+        if g == "layer":
+            self._load(blk, i)
+            if nxt is not None:
+                self._prefetch(nxt)                       # overlap next block's read
+            out = blk(h, attention_mask=mask, position_embeddings=pos_emb,
+                      stb_apply=stb_apply, nmf_N_steps=nmf_N)
+            self._unload(blk, i)
+            return out
+        # --- sub-unit path: attention first, then MLP ---
+        self._load(blk, i, unit=0)
+        self._prefetch(i, unit=1)                          # MLP weights while attn computes
+        h = blk.forward_attn(h, attention_mask=mask, position_embeddings=pos_emb,
+                             stb_apply=stb_apply, nmf_N_steps=nmf_N)
+        self._unload(blk, i, unit=0)
+        self._load(blk, i, unit=1)
+        if nxt is not None:
+            self._prefetch(nxt, unit=0)                    # next block's attn weights
+        h = blk.forward_mlp(h, nmf_N_steps=nmf_N)
+        self._unload(blk, i, unit=1)
+        return h
+
     def _causal(self, S, dtype):
         mask = torch.full((S, S), float("-inf"), device=self.device, dtype=dtype)
         return torch.triu(mask, diagonal=1).view(1, 1, S, S)
@@ -290,10 +378,10 @@ class S3Trainer:
             pos_emb = self.rotary(h, torch.arange(S, device=self.device).unsqueeze(0))
             for i, blk in enumerate(self.blocks):
                 if self._streaming and self._is_cuda:
-                    self.frozen_streamer.load(blk, i)
-                h = blk(h, attention_mask=mask, position_embeddings=pos_emb, stb_apply=True)
-                if self._streaming and self._is_cuda:
-                    self.frozen_streamer.unload(blk, i)
+                    h = self._run_unit(blk, i, h, mask, pos_emb, True,
+                                       nxt=i + 1 if i + 1 < len(self.blocks) else None)
+                else:
+                    h = blk(h, attention_mask=mask, position_embeddings=pos_emb, stb_apply=True)
             h = self.norm(h)
         head_w = self.lm_head.weight
         logits = F.linear(h.to(head_w.device, dtype=head_w.dtype), head_w)
@@ -303,6 +391,102 @@ class S3Trainer:
 
     def amp_dtype_or(self, fallback):
         return self.cfg.amp_dtype if (self.cfg.amp and self._is_cuda) else fallback
+
+    # ---- USF layer-major (formalismo_streaming.md §6, Thm 4) -----------------
+    def _ckpt_store(self, t):
+        """Cor. 2.1: checkpoints live on CPU so VRAM stays independent of depth."""
+        return t.to("cpu", non_blocking=True) if self.cfg.ckpt_offload else t
+
+    def _ckpt_load(self, t):
+        return t.to(self.device, non_blocking=True) if self.cfg.ckpt_offload else t
+
+    def step_layer_major(self, batches) -> float:
+        """One optimizer step over G micro-batches with the loops INVERTED
+        (formalismo_streaming.md §6): keep unit `i` resident and push all G
+        micro-batches through it, then move on.
+
+        I/O per optimizer step drops from G·2Σ|W_i| to 2Σ|W_i| — a factor G —
+        while the gradients stay IDENTICAL (Thm 4: gradient accumulation is a
+        sum, and sums are order-invariant; every VJP is evaluated at the same
+        point as in batch-major).
+
+        Cost: G sets of activations per unit boundary, offloaded to CPU (Cor 2.1).
+        """
+        G = len(batches)
+        emb_dev = self.embed.weight.device
+        ac = dict(device_type="cuda", enabled=self.cfg.amp and self._is_cuda, dtype=self.cfg.amp_dtype)
+
+        def _sync():
+            if self._is_cuda:
+                torch.cuda.synchronize(self.device)
+
+        # ---- prep every micro-batch (each may have its own S / padding) ----
+        H, labels, masks, pos_embs = [], [], [], []
+        t_fwd0 = time.time()
+        with torch.no_grad(), torch.amp.autocast(**ac):
+            for b in batches:
+                inp, lab, mask = self._prep(b, self.amp_dtype_or(torch.float32))
+                h = self.embed(inp.to(emb_dev)).to(self.device)
+                S = inp.shape[1]
+                pe = self.rotary(h, torch.arange(S, device=self.device).unsqueeze(0))
+                H.append(h); labels.append(lab); masks.append(mask.to(h.dtype)); pos_embs.append(pe)
+
+            # ---- FORWARD, layer-major over SEGMENTS ----
+            # Thm 4 x Thm 3 x Prop 5 composed: load a segment ONCE, push all G
+            # micro-batches through it, prefetch the next one meanwhile, free it.
+            segs = self._segments()
+            saved = [[None] * G for _ in segs]
+            flags = [[None] * G for _ in segs]
+            for si, seg in enumerate(segs):
+                i, unit, kind = seg
+                blk = self.blocks[i]
+                self._load(blk, i, unit)
+                if si + 1 < len(segs):
+                    nxt = segs[si + 1]
+                    self._prefetch(nxt[0], nxt[1])
+                for j in range(G):
+                    saved[si][j] = self._ckpt_store(H[j])
+                    flags[si][j] = self._sbs_decide(blk) if kind in ("full", "attn") else None
+                    H[j] = self._run_seg(seg, H[j], masks[j], pos_embs[j], flags[si][j])
+                self._unload(blk, i, unit)
+        _sync(); self._fwd_ms = (time.time() - t_fwd0) * 1000
+
+        # ---- tail per micro-batch -> cotangent at the last block ----
+        t_bwd0 = time.time()
+        head_w = self.lm_head.weight
+        grads, total_loss = [], 0.0
+        for j in range(G):
+            h_last = H[j].detach().requires_grad_(True)
+            with torch.amp.autocast(**ac):
+                normed = self.norm(h_last)
+            logits = F.linear(normed.to(head_w.device, dtype=head_w.dtype), head_w)
+            loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)).float(),
+                                   labels[j].reshape(-1).to(head_w.device), ignore_index=-100)
+            self.scaler.scale(loss.to(self.device) / G).backward()
+            grads.append(h_last.grad)
+            total_loss += float(loss)
+        H = None
+
+        # ---- BACKWARD, layer-major over SEGMENTS (reverse order) ----
+        for si in range(len(segs) - 1, -1, -1):
+            seg = segs[si]
+            i, unit, _kind = seg
+            blk = self.blocks[i]
+            self._load(blk, i, unit)
+            if si - 1 >= 0:
+                prv = segs[si - 1]
+                self._prefetch(prv[0], prv[1])
+            for j in range(G):
+                x = self._ckpt_load(saved[si][j]).detach().requires_grad_(True)
+                with torch.amp.autocast(**ac):
+                    out = self._run_seg(seg, x, masks[j], pos_embs[j], flags[si][j])
+                out.backward(grads[j])
+                grads[j] = x.grad
+                del x, out
+                saved[si][j] = None
+            self._unload(blk, i, unit)
+        _sync(); self._bwd_ms = (time.time() - t_bwd0) * 1000
+        return total_loss / G
 
     def step_streaming(self, batch) -> float:
         """Memory-bounded forward+backward: one layer resident at a time in BOTH
@@ -329,12 +513,12 @@ class S3Trainer:
             h = hidden
             for i, blk in enumerate(self.blocks):
                 saved.append(h)
-                if self.frozen_streamer is not None:
-                    self.frozen_streamer.load(blk, i)
                 flag = self._sbs_decide(blk)
-                h = blk(h, attention_mask=mask, position_embeddings=pos_emb, stb_apply=flag)
                 if self.frozen_streamer is not None:
-                    self.frozen_streamer.unload(blk, i)
+                    h = self._run_unit(blk, i, h, mask, pos_emb, flag,
+                                       nxt=i + 1 if i + 1 < len(self.blocks) else None)
+                else:
+                    h = blk(h, attention_mask=mask, position_embeddings=pos_emb, stb_apply=flag)
                 flags.append(flag)
         _sync(); self._fwd_ms = (time.time() - t_fwd0) * 1000
 
@@ -354,18 +538,93 @@ class S3Trainer:
         for i in range(len(self.blocks) - 1, -1, -1):
             blk = self.blocks[i]
             x = saved[i].detach().requires_grad_(True)
-            if self.frozen_streamer is not None:
-                self.frozen_streamer.load(blk, i)
             with torch.amp.autocast(**ac):
-                out = blk(x, attention_mask=mask, position_embeddings=pos_emb, stb_apply=flags[i])
+                if self.frozen_streamer is not None:
+                    out = self._run_unit(blk, i, x, mask, pos_emb, flags[i],
+                                         nxt=i - 1 if i - 1 >= 0 else None)
+                else:
+                    out = blk(x, attention_mask=mask, position_embeddings=pos_emb, stb_apply=flags[i])
             out.backward(grad)
-            if self.frozen_streamer is not None:
-                self.frozen_streamer.unload(blk, i)
             grad = x.grad
             del x, out
             saved[i] = None
         _sync(); self._bwd_ms = (time.time() - t_bwd0) * 1000
         return float(loss)
+
+    def _train_layer_major(self, dataloader, monitor=None, logger=None):
+        """USF layer-major loop: group G micro-batches per optimizer step so the
+        model is streamed ONCE per step instead of G times (Thm 4)."""
+        import math as _math
+        self.model.train()
+        G = max(1, self.cfg.grad_accum_steps)
+        n_steps = (len(dataloader) // G) * self.cfg.max_epochs
+        gstep = 0
+        t0 = time.time()
+        print(f"[S3Trainer] USF layer-major: G={G} micro-batches/step -> I/O divided by {G}")
+
+        for epoch in range(self.cfg.max_epochs):
+            self._apply_nfr(epoch)
+            self.opt.zero_grad(set_to_none=True)
+            group = []
+            for bidx, batch in enumerate(dataloader):
+                group.append(batch)
+                if len(group) < G:
+                    continue
+
+                toks = sum(b["input_ids"].shape[0] * b["input_ids"].shape[1] for b in group)
+                self.tokens_cum = getattr(self, "tokens_cum", 0) + toks
+                if self._is_cuda:
+                    torch.cuda.reset_peak_memory_stats(self.device)
+                t_step = time.time()
+                loss = self.step_layer_major(group)
+                group = []
+
+                self.scaler.unscale_(self.opt)
+                grad_comp = logger.grad_components() if logger is not None else None
+                grad_total = (sum(v ** 2 for v in grad_comp.values()) ** 0.5) if grad_comp else ""
+                torch.nn.utils.clip_grad_norm_(self.trainable, self.cfg.max_grad_norm)
+                scale_before = self.scaler.get_scale()
+                self.scaler.step(self.opt)
+                self.scaler.update()
+                skipped = self.scaler.get_scale() < scale_before
+                self.opt.zero_grad(set_to_none=True)
+                for g in self.opt.param_groups:
+                    g["lr"] = self._lr_at(gstep, max(1, n_steps))
+                gstep += 1
+
+                step_ms = (time.time() - t_step) * 1000
+                vram_peak = torch.cuda.max_memory_allocated(self.device) / 1024**2 if self._is_cuda else 0.0
+                if logger is not None:
+                    import psutil
+                    row = {
+                        "wall_s": round(time.time() - t0, 2), "epoch": epoch, "opt_step": gstep,
+                        "batch_idx": bidx, "seq_len": group[0]["input_ids"].shape[1] if group else -1,
+                        "tokens_cum": self.tokens_cum, "loss": round(loss, 5),
+                        "perplexity": round(_math.exp(min(loss, 30)), 4),
+                        "lr": self.opt.param_groups[0]["lr"],
+                        "grad_total": round(grad_total, 5) if grad_total != "" else "",
+                        "scaler_scale": self.scaler.get_scale(), "skipped": skipped,
+                        "fwd_ms": round(self._fwd_ms, 1), "bwd_ms": round(self._bwd_ms, 1),
+                        "step_ms": round(step_ms, 1),
+                        "vram_alloc_mb": round(torch.cuda.memory_allocated(self.device) / 1024**2, 1) if self._is_cuda else 0,
+                        "vram_peak_mb": round(vram_peak, 1),
+                        "cpu_ram_mb": round(psutil.Process().memory_info().rss / 1024**2, 1),
+                        # Thm 4: the model is streamed once per optimizer step, not G times
+                        "disk_read_mb": round(getattr(self, "_disk_mb_per_step", 0), 1),
+                    }
+                    if grad_comp:
+                        row.update({f"grad_{k}": round(v, 5) for k, v in grad_comp.items()})
+                    logger.log_step(row)
+                    if gstep == 1 or gstep % max(1, self.cfg.log_interval) == 0:
+                        logger.log_layer_grads(gstep)
+
+                if gstep % max(1, self.cfg.log_interval) == 0 or gstep == 1:
+                    print(f"[E{epoch+1} step{gstep}] loss={loss:.4f} vram_peak={vram_peak:.0f}MB "
+                          f"fwd={self._fwd_ms:.0f}ms bwd={self._bwd_ms:.0f}ms")
+                    if monitor is not None:
+                        monitor.record_step(step=gstep, epoch=epoch, batch_idx=bidx, micro_step=-1,
+                                            loss=loss, step_time_ms=step_ms, vram_mb=vram_peak,
+                                            lr=self.opt.param_groups[0]["lr"], seq_len=0)
 
     # ---- training ---------------------------------------------------------
     def _lr_at(self, step, total):
@@ -376,6 +635,8 @@ class S3Trainer:
         return self.cfg.learning_rate * 0.5 * (1 + math.cos(math.pi * prog))
 
     def train(self, dataloader, monitor=None, logger=None):
+        if self._streaming and self.cfg.layer_major:
+            return self._train_layer_major(dataloader, monitor, logger)
         import math as _math
         self.model.train()
         total_steps = len(dataloader) * self.cfg.max_epochs // max(1, self.cfg.grad_accum_steps)

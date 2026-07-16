@@ -150,6 +150,42 @@ class S3Block(nn.Module):
         m = self.self_attn.q_proj.modulated_sigma()
         return torch.log(m + 1e-8)
 
+    # -- sub-unit forward (formalismo_streaming.md §5, Thm 3) -----------------
+    # Splitting the block lets the streamer hold only the attention weights, then
+    # only the MLP weights — peak VRAM becomes max(|W_attn|,|W_mlp|) instead of
+    # |W_layer|. This is what makes 70B/405B fit (Cor. 3.2). The composition is
+    # identical to `forward`, so gradients are unchanged.
+
+    def forward_attn(self, hidden_states, attention_mask=None, position_embeddings=None,
+                     past_key_values=None, cache_position=None, nmf_N_steps=None,
+                     stb_apply=None, **kwargs):
+        """STB + attention + residual + NMF₁. Needs only the attention weights."""
+        h = hidden_states
+        if self.stb is not None:
+            if stb_apply is None:
+                stb_apply = (not self.training) or self.sbs_p >= 1.0 or (torch.rand(()) < self.sbs_p)
+            if stb_apply:
+                h = self.stb(h, self._sigma_log())
+        residual = h
+        x = self.input_layernorm(h)
+        out = self.self_attn(hidden_states=x, position_embeddings=position_embeddings,
+                             attention_mask=attention_mask, past_key_values=past_key_values,
+                             cache_position=cache_position, **kwargs)
+        out = out[0] if isinstance(out, tuple) else out
+        h = residual + out
+        if self.nmf_attn is not None:
+            h = self.nmf_attn(h, N_steps=nmf_N_steps)
+        return h
+
+    def forward_mlp(self, h, nmf_N_steps=None):
+        """MLP + residual + NMF₂. Needs only the MLP weights."""
+        residual = h
+        x = self.post_attention_layernorm(h)
+        h = residual + self.mlp(x)
+        if self.nmf_mlp is not None:
+            h = self.nmf_mlp(h, N_steps=nmf_N_steps)
+        return h
+
     def forward(
         self,
         hidden_states: torch.Tensor,

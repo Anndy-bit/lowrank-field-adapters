@@ -177,6 +177,14 @@ def main():
     ap.add_argument("--grad_accum", type=int, default=16)
     ap.add_argument("--batch", type=int, default=1,
                     help="examples per step — amortizes the per-step disk read (big speedup)")
+    # --- USF (formalismo_streaming.md) ---
+    ap.add_argument("--granularity", default="auto",
+                    choices=["auto", "layer", "sublayer", "matrix"],
+                    help="Thm 3 / §9: streamable unit. 'auto' picks the coarsest that fits.")
+    ap.add_argument("--prefetch", action="store_true",
+                    help="Prop. 5: double-buffer the next unit's disk read")
+    ap.add_argument("--layer_major", action="store_true",
+                    help="Thm 4: invert loops -> I/O divided by grad_accum")
     ap.add_argument("--limit", type=int, default=None, help="limit #training examples")
     ap.add_argument("--svmo_k", type=int, default=128)
     ap.add_argument("--sbs_p", type=float, default=0.3)
@@ -196,8 +204,8 @@ def main():
     streamer = None
     if args.mode == "stream":
         from src.training.streaming_loader import (
-            build_streaming_model, ShardReader, FrozenStreamer,
-            materialize_shared, find_snapshot,
+            build_streaming_model, ShardReader, FrozenStreamer, PrefetchStreamer,
+            materialize_shared, find_snapshot, choose_granularity,
         )
         print(f"[S³] building {args.model} skeleton on meta (0 memory) ...")
         model, _ = build_streaming_model(args.model)
@@ -214,8 +222,19 @@ def main():
         # LM head in fp32 on CPU for a stable, precise cross-entropy
         import torch.nn as _nn
         model.lm_head.weight = _nn.Parameter(model.lm_head.weight.data.float(), requires_grad=False)
-        streamer = FrozenStreamer(reader, torch.device(args.device))
-        print("[S³] disk-streaming mode: one layer resident on GPU at a time.")
+
+        # §9 — pick the coarsest granularity that fits this GPU (model-agnostic).
+        if args.granularity == "auto":
+            free_b = (torch.cuda.get_device_properties(0).total_memory
+                      if args.device.startswith("cuda") else 4 * 2**30)
+            gran = choose_granularity(model.config, int(free_b * 0.75),
+                                      reserve_bytes=int(0.6 * 2**30), prefetch=args.prefetch)
+        else:
+            gran = args.granularity
+        cls = PrefetchStreamer if args.prefetch else FrozenStreamer
+        streamer = cls(reader, torch.device(args.device), granularity=gran)
+        print(f"[S³] USF streaming: granularity='{gran}' prefetch={args.prefetch} "
+              f"— one unit resident on GPU at a time.")
     else:
         print(f"[S³] loading {args.model} offline (quant={args.quant}) ...")
         model, tok = load_base_model(args.model, args.quant, args.device,
@@ -231,6 +250,7 @@ def main():
         learning_rate=args.lr, max_epochs=args.epochs, grad_accum_steps=args.grad_accum,
         gradient_checkpointing=True, layer_swap=args.layer_swap,
         amp=args.device.startswith("cuda"), amp_dtype=torch.float16,
+        layer_major=args.layer_major, ckpt_offload=True,
         use_nfr=True, use_sbs=True, use_sgc=True,
         extra_opts=("TER", "DRA", "MSO", "TOWS", "HFISC", "FDGD", "GNS", "EMP", "SMV"),
     )
