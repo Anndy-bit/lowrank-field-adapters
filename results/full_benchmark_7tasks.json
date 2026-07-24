@@ -1,0 +1,197 @@
+{
+  "base": {
+    "results": {
+      "boolq": {
+        "name": "boolq",
+        "alias": "boolq",
+        "sample_len": 500,
+        "acc,none": 0.842,
+        "acc_stderr,none": 0.0163280498045799
+      },
+      "piqa": {
+        "name": "piqa",
+        "alias": "piqa",
+        "sample_len": 500,
+        "acc,none": 0.812,
+        "acc_stderr,none": 0.01749067888034626,
+        "acc_norm,none": 0.83,
+        "acc_norm_stderr,none": 0.016815633531393464
+      },
+      "hellaswag": {
+        "name": "hellaswag",
+        "alias": "hellaswag",
+        "sample_len": 500,
+        "acc,none": 0.55,
+        "acc_stderr,none": 0.02227087748536047,
+        "acc_norm,none": 0.69,
+        "acc_norm_stderr,none": 0.020704041021724684
+      },
+      "winogrande": {
+        "name": "winogrande",
+        "alias": "winogrande",
+        "sample_len": 500,
+        "acc,none": 0.734,
+        "acc_stderr,none": 0.019780559675655396
+      },
+      "arc_easy": {
+        "name": "arc_easy",
+        "alias": "arc_easy",
+        "sample_len": 500,
+        "acc,none": 0.806,
+        "acc_stderr,none": 0.017701827855304594,
+        "acc_norm,none": 0.814,
+        "acc_norm_stderr,none": 0.01741880678058399
+      },
+      "arc_challenge": {
+        "name": "arc_challenge",
+        "alias": "arc_challenge",
+        "sample_len": 500,
+        "acc,none": 0.504,
+        "acc_stderr,none": 0.022382357781962105,
+        "acc_norm,none": 0.528,
+        "acc_norm_stderr,none": 0.022347949832668024
+      },
+      "openbookqa": {
+        "name": "openbookqa",
+        "alias": "openbookqa",
+        "sample_len": 500,
+        "acc,none": 0.348,
+        "acc_stderr,none": 0.021323728632807425,
+        "acc_norm,none": 0.484,
+        "acc_norm_stderr,none": 0.022371610982580396
+      }
+    },
+    "wall_hours": 2.26779500093725,
+    "vram_peak_mb": 2377.0234375
+  },
+  "lora_r8": {
+    "results": {
+      "boolq": {
+        "name": "boolq",
+        "alias": "boolq",
+        "sample_len": 500,
+        "acc,none": 0.866,
+        "acc_stderr,none": 0.01524969200385453
+      },
+      "piqa": {
+        "name": "piqa",
+        "alias": "piqa",
+        "sample_len": 500,
+        "acc,none": 0.812,
+        "acc_stderr,none": 0.01749067888034626,
+        "acc_norm,none": 0.84,
+        "acc_norm_stderr,none": 0.016411540980502393
+      },
+      "hellaswag": {
+        "name": "hellaswag",
+        "alias": "hellaswag",
+        "sample_len": 500,
+        "acc,none": 0.554,
+        "acc_stderr,none": 0.022252153078595932,
+        "acc_norm,none": 0.682,
+        "acc_norm_stderr,none": 0.020847571620814014
+      },
+      "winogrande": {
+        "name": "winogrande",
+        "alias": "winogrande",
+        "sample_len": 500,
+        "acc,none": 0.752,
+        "acc_stderr,none": 0.019332342821239124
+      },
+      "arc_easy": {
+        "name": "arc_easy",
+        "alias": "arc_easy",
+        "sample_len": 500,
+        "acc,none": 0.828,
+        "acc_stderr,none": 0.01689386887634749,
+        "acc_norm,none": 0.78,
+        "acc_norm_stderr,none": 0.018544211375820276
+      },
+      "arc_challenge": {
+        "name": "arc_challenge",
+        "alias": "arc_challenge",
+        "sample_len": 500,
+        "acc,none": 0.566,
+        "acc_stderr,none": 0.02218721580302901,
+        "acc_norm,none": 0.562,
+        "acc_norm_stderr,none": 0.022210326363977382
+      },
+      "openbookqa": {
+        "name": "openbookqa",
+        "alias": "openbookqa",
+        "sample_len": 500,
+        "acc,none": 0.34,
+        "acc_stderr,none": 0.021206117013673084,
+        "acc_norm,none": 0.472,
+        "acc_norm_stderr,none": 0.022347949832668024
+      }
+    },
+    "wall_hours": 2.2970051675372654,
+    "vram_peak_mb": 3321.529296875
+  },
+  "s3_full": {
+    "results": {
+      "boolq": {
+        "name": "boolq",
+        "alias": "boolq",
+        "sample_len": 500,
+        "acc,none": 0.848,
+        "acc_stderr,none": 0.016071982367911835
+      },
+      "piqa": {
+        "name": "piqa",
+        "alias": "piqa",
+        "sample_len": 500,
+        "acc,none": 0.822,
+        "acc_stderr,none": 0.01712362218906232,
+        "acc_norm,none": 0.84,
+        "acc_norm_stderr,none": 0.016411540980502393
+      },
+      "hellaswag": {
+        "name": "hellaswag",
+        "alias": "hellaswag",
+        "sample_len": 500,
+        "acc,none": 0.55,
+        "acc_stderr,none": 0.02227087748536047,
+        "acc_norm,none": 0.688,
+        "acc_norm_stderr,none": 0.020740596536488017
+      },
+      "winogrande": {
+        "name": "winogrande",
+        "alias": "winogrande",
+        "sample_len": 500,
+        "acc,none": 0.754,
+        "acc_stderr,none": 0.019279819056352458
+      },
+      "arc_easy": {
+        "name": "arc_easy",
+        "alias": "arc_easy",
+        "sample_len": 500,
+        "acc,none": 0.816,
+        "acc_stderr,none": 0.017346174781752842,
+        "acc_norm,none": 0.788,
+        "acc_norm_stderr,none": 0.01829703700401386
+      },
+      "arc_challenge": {
+        "name": "arc_challenge",
+        "alias": "arc_challenge",
+        "sample_len": 500,
+        "acc,none": 0.528,
+        "acc_stderr,none": 0.022347949832668024,
+        "acc_norm,none": 0.56,
+        "acc_norm_stderr,none": 0.022221331534143057
+      },
+      "openbookqa": {
+        "name": "openbookqa",
+        "alias": "openbookqa",
+        "sample_len": 500,
+        "acc,none": 0.332,
+        "acc_stderr,none": 0.021081766571222797,
+        "acc_norm,none": 0.47,
+        "acc_norm_stderr,none": 0.0223427481925028
+      }
+    },
+    "wall_hours": 2.844857814113299,
+    "vram_peak_mb": 3403.9990234375
+  }
+}

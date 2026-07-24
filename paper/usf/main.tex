@@ -5,6 +5,8 @@
 %==============================================================================
 \documentclass[journal]{IEEEtran}
 
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{amsmath,amssymb,amsthm}
@@ -40,41 +42,53 @@
 
 \begin{document}
 
-\title{\usf{}: Unit-Streamed Fine-Tuning of Large Language\\ Models with Exact Gradients on
+% Sin \\ manual: IEEEtran centra y equilibra el título mejor que un salto forzado.
+\title{\usf{}: Unit-Streamed Fine-Tuning of Large Language Models with Exact Gradients on
 Consumer GPUs}
 
-% Bloque de autor: se deja SIN autor a propósito. Descomentar y rellenar antes del envío final.
-% \author{Nombre Apellido%
-% \thanks{Afiliación, ciudad, país. Correo: usuario@dominio.}%
-% \thanks{Manuscript prepared July 2026. All experiments were carried out on a single
-% NVIDIA GTX~1050 (3.94\,GB) desktop machine.}}
-\author{\thanks{Manuscript prepared July 2026. All experiments were carried out on a single
-NVIDIA GTX~1050 (3.94\,GB) desktop machine.}}
+\author{
+Nicolas Andrey Orozco Giraldo, Luis Eduardo Muñoz Guerrero\\
+\textit{Universidad Tecnológica de Pereira}\\
+Pereira, Colombia\\
+nicolas.orozco@utp.edu.co, lemunozg@utp.edu.co\\
+ORCID: \href{https://orcid.org/0000-0002-6332-9757}{0000-0002-6332-9757},
+\href{https://orcid.org/0000-0002-9414-6187}{0000-0002-9414-6187}\\[6pt]
+Yony Fernando Ceballos\\
+\textit{Facultad de Ingeniería, Grupo de Ingeniería y Sociedad}\\
+\textit{Universidad de Antioquia}\\
+Medellín, Colombia\\
+yony.ceballos@udea.edu.co\\
+ORCID: \href{https://orcid.org/0000-0001-5787-8832}{0000-0001-5787-8832}
+\thanks{Manuscript prepared July 2026. All experiments were carried out on a single
+laptop-class NVIDIA GeForce GTX~1050 (Mobile, 3.94\,GB, no tensor cores).}}
 
 \maketitle
 
 %==============================================================================
 \begin{abstract}
 Fine-tuning a 7B-parameter language model conventionally requires 8--16\,GB of GPU memory, because
-the frozen base must remain resident throughout the forward and backward passes. We show that this
-requirement is an artifact of implementation rather than a mathematical necessity. Reverse-mode
+the frozen base must remain resident throughout the forward and backward passes. That requirement
+is what excludes anyone without data-centre-class hardware from fine-tuning models at this scale at
+all, regardless of how few parameters they intend to train. We show that the requirement comes from
+implementation choices, not from mathematical necessity. Reverse-mode
 differentiation composes \emph{local} vector--Jacobian products: the gradient at layer $i$ depends
-only on that layer's input, its weights, and the incoming cotangent---never on the other $L-1$
+only on that layer's input, its weights, and the incoming cotangent, never on the other $L-1$
 layers. We introduce \emph{Unit-Streamed Fine-Tuning} (\usf), which keeps exactly one weight unit
 resident at a time, streamed from disk, and prove that the resulting gradients are \emph{exact}
-(\Cref{thm:exact}) rather than approximate. The consequence is a memory bound independent of model
+(\Cref{thm:exact}) and not approximate. The consequence is a memory bound independent of model
 depth and of total parameter count: only the largest single unit matters (\Cref{thm:vram}). We
 further prove that inverting the loop order (\emph{layer-major}, \Cref{thm:lm}) divides disk
-traffic by the gradient-accumulation factor $G$ while leaving gradients bit-identical, shifting the
-regime from I/O-bound to compute-bound. On a GTX~1050 (3.94\,GB) we fine-tune Qwen2.5-7B---15.2\,GB
-of weights on disk---at an allocator peak of 2.2\,GB, or 2.9\,GB of total device occupancy
-including the CUDA context, reducing held-out perplexity from 9.52 to 4.46; layer-major is verified gradient-exact
+traffic by the gradient-accumulation factor $G$ while leaving gradients bit-identical, moving the
+system from I/O-bound to compute-bound. On a laptop-class GTX~1050 (3.94\,GB, no tensor cores)---a
+deliberately unfavourable choice, since a bound that holds here holds on essentially any GPU a
+practitioner might own---we fine-tune Qwen2.5-7B (15.2\,GB
+of weights on disk) at an allocator peak of 2.2\,GB, or 2.9\,GB of total device occupancy
+including the CUDA context, reducing held-out perplexity from 9.52 to 4.46. Layer-major is verified gradient-exact
 on the 7B model itself ($\max|\Delta|=0$ over 1400 tensors) and yields a measured $1.40\times$
-speed-up. A predictive cost model matches measurements within 6\%. \usf{} is adapter-agnostic: a
+speed-up, and a predictive cost model matches measurements within 6\%. \usf{} is adapter-agnostic: a
 spectral adapter and LoRA both run unmodified. Under the same budget, 4-bit quantization does not
-fit (5.43\,GB required), making this a feasibility separation rather than a preference. The bound
-predicts that Llama-3-70B fits the same card at the implemented granularity; we state precisely
-what this does and does not establish.
+fit (5.43\,GB required). The bound predicts that Llama-3-70B fits the same card at the implemented
+granularity.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -100,7 +114,7 @@ resident base by a factor of four to eight. It does not attack the coupling. A 4
 still occupies several gigabytes, a 4-bit 70B model still exceeds any consumer card, and the
 compression is paid for in accuracy. Offloading frameworks such as
 ZeRO-Infinity~\cite{rajbhandari2021zeroinfinity} do move parameters off the device, but they were
-designed for a different regime---training \emph{all} weights across a cluster---where the dominant
+designed for a different setting: training \emph{all} weights across a cluster, where the dominant
 problem is sharding optimizer state.
 
 \subsection{The observation}
@@ -109,7 +123,7 @@ This paper begins from an elementary property of reverse-mode differentiation
 \cite{griewank2008evaluating,baydin2018autodiff} that, to our knowledge, has not been exploited to
 its logical conclusion in this setting. Backpropagation is a composition of \emph{local}
 vector--Jacobian products (VJPs). To differentiate through layer $i$ one requires that layer's
-input, that layer's weights, and the incoming cotangent---and nothing else. The remaining $L-1$
+input, that layer's weights, and the incoming cotangent, and nothing else. The remaining $L-1$
 layers are irrelevant \emph{at that instant}. Keeping the whole model resident is therefore a
 choice made for speed, not a requirement imposed by correctness.
 
@@ -122,7 +136,7 @@ ordinary full-graph autograd. \usf{} is not an approximation.
 \subsection{The consequence}
 
 Once residency is decoupled from correctness, the memory bound changes shape. The peak is set by
-the largest \emph{single} unit, not by the model:
+the largest \emph{single} unit:
 \begin{equation}
 \label{eq:headline}
 \mathrm{VRAM}_{\text{peak}} \;\approx\; \max_u \Wu \cdot s \;+\; |\theta|\cdot s_{\text{opt}} \;+\; A ,
@@ -130,12 +144,12 @@ the largest \emph{single} unit, not by the model:
 which depends neither on the depth $L$ nor on the total size $\sum_i |W_i|$
 (\Cref{thm:vram} and its corollaries). Adding layers to a model does not increase its memory
 requirement; it increases only time and disk traffic. Model size ceases to be a memory problem and
-becomes a storage-and-time problem. We regard this decoupling, rather than any individual
-engineering component, as the contribution of this work.
+becomes a storage-and-time problem. It is this decoupling, and not any single engineering
+component, that we regard as the contribution of this work.
 
 A second result follows from the same locality. Because gradient accumulation is a sum, and sums
-are order-invariant, the two nested loops of a training step---over micro-batches and over
-layers---may be exchanged. Keeping a unit resident while all $G$ micro-batches pass through it
+are order-invariant, the two nested loops of a training step (over micro-batches and over
+layers) may be exchanged. Keeping a unit resident while all $G$ micro-batches pass through it
 divides disk traffic by $G$ with bit-identical gradients (\Cref{thm:lm}). This reordering is
 pointless when the model fits in memory, which is presumably why the literature does not consider
 it; under streaming it is the dominant optimization, and it moves the system from I/O-bound to
@@ -154,13 +168,14 @@ parameter count (\Cref{thm:vram}, \Cref{cor:depth}, \Cref{cor:size}).
 factor $G$ at no cost in correctness (\Cref{thm:lm}), changing the performance regime
 (\Cref{sec:cost}).
 \item \textbf{A predictive cost model} that matches measurement within 6\% (\Cref{sec:cost}),
-which is what licenses our scaling statements as predictions rather than extrapolations.
+which is why we treat the scaling statements in \Cref{sec:scaling} as predictions rather than
+extrapolations.
 \item \textbf{An adapter- and model-agnostic system.} The same infrastructure runs LoRA and a
 spectral adapter unmodified (\Cref{cor:agnostic}), and selects its streaming granularity
 automatically from the available memory (\Cref{sec:auto}).
 \end{enumerate}
 
-We are explicit about scope. We \emph{demonstrate} 7B on a 4\,GB card; we \emph{predict}, from a
+We \emph{demonstrate} 7B on a 4\,GB card; we \emph{predict}, from a
 proved bound and a validated cost model, that 70B fits the same card with the machinery we
 implement; and we identify precisely which unimplemented extension a 405B model would require
 (\Cref{sec:scaling}). We do not claim the latter two as results.
@@ -207,8 +222,8 @@ trade-off has not previously been applied to frozen weights with an accompanying
 guarantee.
 
 \textbf{I/O-aware design.} FlashAttention~\cite{dao2022flashattention} demonstrated that
-reorganising a computation around its memory traffic---without altering its result---yields
-substantial gains, and that exactness is worth preserving rather than trading away. \usf{} shares
+reorganising a computation around its memory traffic, without altering its result, yields
+substantial gains, and that exactness need not be sacrificed for speed. \usf{} shares
 that philosophy at a different level of the hierarchy: FlashAttention minimises traffic between
 on-chip and high-bandwidth memory within attention, whereas \usf{} governs traffic between disk and
 device for the weights of the entire model. \Cref{thm:lm} is an I/O-aware scheduling result in the
@@ -251,7 +266,7 @@ $\textsc{Free}(u)$.
 \end{definition}
 
 \Cref{alg:usf} states the base algorithm. The forward pass builds no autograd graph: activations
-\emph{and} weights are discarded, and each layer is recomputed---with its weights re-streamed---
+\emph{and} weights are discarded, and each layer is recomputed, with its weights re-streamed,
 during the backward pass.
 
 \begin{algorithm}[t]
@@ -309,9 +324,8 @@ tensor from disk, while $\theta_i$ is resident and unmodified within a step. For
 $g=\partial\ell/\partial h_i$ holds by backward induction from $g_L = \partial\ell/\partial h_L$.
 
 Every local VJP is therefore evaluated at exactly the point at which it would be evaluated in the
-full graph, and their composition---which is precisely the chain rule---yields the same value.
-Finally, $\textsc{Free}(W_i)$ alters only where a tensor resides, not its value; arithmetic is
-invariant to device placement.
+full graph, and their composition, which is exactly the chain rule, yields the same value.
+Finally, $\textsc{Free}(W_i)$ only relocates a tensor: arithmetic is invariant to device placement.
 \end{IEEEproof}
 
 \begin{corollary}[Not an approximation]
@@ -347,10 +361,10 @@ not specific to \usf{}. In our measurements, with identical shapes and kernels, 
 Under \Cref{alg:usf} with granularity $\mathcal{U}$, the peak device memory satisfies
 \begin{equation}
 \label{eq:vram}
-\mathrm{VRAM}_{\text{peak}} \;\le\; \underbrace{\max_u \Wu \cdot s}_{\text{resident unit}}
-\;+\; \underbrace{|\theta|\cdot s_{\text{opt}}}_{\text{adapters}}
-\;+\; \underbrace{A}_{\text{activations}}
-\;+\; \underbrace{K}_{\text{checkpoints}},
+\mathrm{VRAM}_{\text{peak}} \le \underbrace{\max_u \Wu \cdot s}_{\text{resident unit}}
++ \underbrace{|\theta|\cdot s_{\text{opt}}}_{\text{adapters}}
++ \underbrace{A}_{\text{activations}}
++ \underbrace{K}_{\text{checkpoints}},
 \end{equation}
 where $A$ is the internal activation memory of a \emph{single} unit and
 $K = L\cdot B\cdot S\cdot d\cdot s$ if the checkpoints $\{c_i\}$ reside on device.
@@ -368,8 +382,8 @@ iterations.
 
 \begin{corollary}[Independence of depth]
 \label{cor:depth}
-The checkpoints $c_i$ are activations, not weights, and are not required on device between their
-production and their use. Offloading them to host memory gives $K \approx 0$ and hence
+The checkpoints $c_i$ are activations, and unlike weights they are not required on device between
+their production and their use. Offloading them to host memory gives $K \approx 0$ and hence
 \begin{equation}
 \mathrm{VRAM}_{\text{peak}} \;\approx\; \max_u \Wu \cdot s + |\theta| \cdot s_{\text{opt}} + A ,
 \end{equation}
@@ -382,8 +396,8 @@ The bound does not contain $\sum_i |W_i|$. Two models whose largest unit has the
 the same memory requirement, however different their total parameter counts.
 \end{corollary}
 
-\Cref{cor:size} is the paper's central claim, and it is worth stating what it does and does not
-say. It does not say that a larger model is as cheap to fine-tune as a smaller one: the I/O and
+\Cref{cor:size} is the paper's central claim. It does not say that a larger model is as cheap to
+fine-tune as a smaller one: the I/O and
 compute costs both scale with $\sum_i |W_i|$, as \Cref{sec:cost} quantifies. It says that those
 costs are paid in \emph{time}, not in \emph{memory}. The device requirement is set by the largest
 single unit and by nothing else, which is why the granularity hierarchy of the next section
@@ -414,18 +428,18 @@ smaller pieces.
 \Cref{tab:scaling} instantiates \Cref{thm:gran} for four model families. Two observations follow.
 Llama-3-70B~\cite{grattafiori2024llama3} fits a 3.94\,GB card at \emph{layer} granularity, with
 1.59\,GB per block; no refinement is needed. A 405B model does not fit at layer or sublayer
-granularity, but its largest single matrix occupies 1.62\,GB and would fit---which is the content
-of \Cref{cor:size} at its extreme.
+granularity, but its largest single matrix occupies 1.62\,GB and would fit: this is \Cref{cor:size}
+taken to its extreme.
 
-\begin{remark}[An implementation limit, stated plainly]
+\begin{remark}[Implementation limit]
 \label{rem:matrixlimit}
 \Cref{thm:gran} is a statement about partitions and holds at matrix granularity. Our
 \emph{implementation}, however, supports layer and sublayer granularity only. The reason is
-engineering rather than mathematics: we delegate attention to the reference
+an engineering limitation, not a mathematical one: we delegate attention to the reference
 implementation~\cite{wolf2020transformers}, which consumes $W_q, W_k, W_v, W_o$ jointly within a
 single call. Streaming them individually would require reimplementing the attention internals,
 including rotary embeddings~\cite{su2024roformer} and grouped-query
-attention~\cite{shazeer2019mqa}---a substitution we judged to carry more risk of silent
+attention~\cite{shazeer2019mqa}, a substitution we judged to carry more risk of silent
 incorrectness than the benefit warrants. We therefore claim 70B by the bound at an implemented
 granularity, and we claim nothing for 405B beyond \Cref{tab:scaling}.
 \end{remark}
@@ -437,6 +451,7 @@ granularity, and we claim nothing for 405B beyond \Cref{tab:scaling}.
 drives the streamer.}
 \label{tab:scaling}
 \footnotesize
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}lrrrrc@{}}
 \toprule
 \textbf{Model} & $L$ & \textbf{layer} & \textbf{attn/mlp} & \textbf{matrix} & \textbf{4\,GB?} \\
@@ -464,7 +479,7 @@ following reordering removes that factor.
 \begin{definition}[Layer-major]
 \label{def:lm}
 Exchange the two loops: hold unit $u$ resident and pass all $G$ micro-batches through it before
-advancing to $u+1$. The backward pass is symmetric---one load of $W_i$, then $G$ local
+advancing to $u+1$. The backward pass is symmetric: one load of $W_i$, then $G$ local
 backpropagations.
 \end{definition}
 
@@ -539,11 +554,10 @@ boundary activations, which \Cref{cor:depth} places in host memory.}
 \label{thm:lm}
 The layer-major schedule of \Cref{def:lm} produces gradients identical to \Cref{alg:usf}, and its
 I/O per optimizer step is
-\begin{equation}
-\mathrm{I/O}_{\text{layer-major}} = 2\sum_i |W_i|
-\quad\text{versus}\quad
-\mathrm{I/O}_{\text{batch-major}} = G \cdot 2\sum_i |W_i| ,
-\end{equation}
+\begin{align}
+\mathrm{I/O}_{\text{layer-major}} &= 2\sum_i |W_i| , \\
+\mathrm{I/O}_{\text{batch-major}} &= G \cdot 2\sum_i |W_i| ,
+\end{align}
 a reduction by the factor $G$.
 \end{theorem}
 
@@ -552,8 +566,8 @@ a reduction by the factor $G$.
 $\nabla_\theta \ell = \sum_{j=1}^{G} \nabla_\theta \ell^{(j)}$. Addition is commutative and
 associative, so the order in which the terms are accumulated does not affect the sum. Each
 $\nabla_\theta \ell^{(j)}$ is computed by the local VJP of \Cref{thm:exact}, evaluated at
-$(c_i^{(j)}, W_i, \theta_i)$---the same points as in the batch-major schedule. Exchanging the loops
-changes the order of visits, not any evaluation point.
+$(c_i^{(j)}, W_i, \theta_i)$, the same points as in the batch-major schedule. Exchanging the loops
+only reorders these visits; it leaves every evaluation point untouched.
 
 \emph{I/O.} In \Cref{def:lm} the outer loop traverses $i$ once per optimizer step, so each $W_i$ is
 loaded exactly once per pass and twice in total (forward and backward), giving $2\sum_i |W_i|$. In
@@ -565,16 +579,16 @@ $G \cdot B \cdot S \cdot d \cdot s$ bytes; for $G=8$, $B=4$, $S=256$, $d=3584$ i
 59\,MB per boundary, and by \Cref{cor:depth} it may be placed in host memory. The trade is
 therefore $G$-fold less I/O in exchange for $G$-fold more offloadable activations.
 
-\begin{proposition}[Choice of $G$]
-\label{prop:G}
 Under layer-major, the time per example is
 \begin{equation}
+\label{eq:choiceG}
 T_{\text{ex}}(G) = \frac{2\sum_i |W_i|}{\mathrm{BW}\cdot G\cdot B} + \frac{C}{B},
 \end{equation}
-with $C$ the compute time of one micro-batch and $\mathrm{BW}$ the disk bandwidth. $T_{\text{ex}}$
-is monotonically decreasing in $G$ and converges to the compute-bound limit $C/B$. The largest $G$
-satisfying the activation-memory constraint is therefore optimal.
-\end{proposition}
+with $C$ the compute time of one micro-batch and $\mathrm{BW}$ the effective weight-loading
+bandwidth measured end to end through $\textsc{Load}$, not the drive's raw read speed
+(\Cref{sec:cost} quantifies the gap). $G$ appears only in the I/O term, in the denominator, so
+$T_{\text{ex}}$ decreases monotonically in $G$ toward the compute-bound limit $C/B$: the largest $G$
+the activation-memory budget allows is optimal, with no further argument needed.
 
 \begin{remark}[Why this is absent from prior work]
 Layer-major has no meaning when the model is resident: if $W_i$ never leaves the device, loading it
@@ -607,7 +621,7 @@ Double buffering keeps two units resident, so the first term of \eqref{eq:vram} 
 $2\max_u \Wu \cdot s$; for 7B at layer granularity this is 0.86\,GB rather than 0.43\,GB, which
 remains comfortable on a 3.94\,GB card. With our calibrated constants (\Cref{sec:cost}), one full
 traversal costs $\sum_u t_{\text{io}} \approx 48$\,s against $\sum_u t_{\text{cmp}} \approx 57$\,s
-for a single micro-batch at $B{=}4$, $S{=}256$, so the overlap condition holds---though only just,
+for a single micro-batch at $B{=}4$, $S{=}256$, so the overlap condition holds, though only just,
 which is consistent with \eqref{eq:regime} placing the compute-bound threshold at
 $8.6\times10^{2}$ tokens and this configuration supplying $1024$. Combined with \Cref{thm:lm},
 which divides $t_{\text{io}}$ by $G$, the margin becomes ample. Prefetching alters when a tensor is read, never its value, so
@@ -617,8 +631,16 @@ which divides $t_{\text{io}}$ by $G$, the margin becomes ample. Prefetching alte
 \section{Cost Model}
 \label{sec:cost}
 
-Let $N = \sum_i |W_i| / s$ be the number of streamed parameters, $\mathrm{BW}$ the effective disk
-bandwidth, and $\Phi$ the effective device throughput. Using the standard estimate of $6N$ FLOPs
+Let $N = \sum_i |W_i| / s$ be the number of streamed parameters, $\Phi$ the effective device
+throughput, and $\mathrm{BW}$ the effective \emph{weight-loading} bandwidth: the measured, wall-clock
+throughput of $\textsc{Load}$ end to end---file read, safetensors deserialisation, and the
+host-to-device copy---not the raw sequential read speed of the disk. The distinction matters: a raw
+read of a model shard on our NVMe reaches 1.3--1.7\,GB/s (\texttt{dd}, \texttt{O\_DIRECT}), roughly
+$3\times$ our calibrated $\mathrm{BW}=0.54$\,GB/s; the gap is Python- and
+deserialisation-side overhead in $\textsc{Load}$, not a property of the drive. \eqref{eq:tio}
+uses the calibrated 0.54\,GB/s throughout, since that is what actually gates a training step, not
+the drive's raw capability.
+Using the standard estimate of $6N$ FLOPs
 per token for a combined forward and backward pass~\cite{kaplan2020scaling},
 \begin{align}
 T_{\text{io}}  &= 2Ns/\mathrm{BW} \quad \text{(layer-major)}, \label{eq:tio}\\
@@ -633,11 +655,11 @@ size $N$ cancels and the condition reduces to a statement about tokens alone,
 G\cdot B\cdot S \;>\; \frac{s\,\Phi}{3\,\mathrm{BW}} .
 \end{equation}
 That $N$ cancels is the substantive part: which resource binds is a property of the \emph{schedule},
-not of the model's size, so a larger model does not become more I/O-bound---it becomes uniformly
+not of the model's size, so a larger model does not become more I/O-bound; it simply becomes uniformly
 slower. With our calibrated constants ($s=2$, $\Phi = 0.7$\,TFLOP/s, $\mathrm{BW}=0.54$\,GB/s) the
 threshold is $\approx 8.6\times 10^{2}$ tokens per step. A layer-major step with $G=8$, $B=4$,
 $S=256$ processes $8192$ tokens and is therefore firmly compute-bound, by an order of
-magnitude---the reordering of \Cref{thm:lm} does not merely accelerate the system, it changes which
+magnitude. The reordering of \Cref{thm:lm} does not just accelerate the system; it changes which
 resource limits it. This is the roofline reasoning of~\cite{williams2009roofline} applied to an
 out-of-core training loop.
 
@@ -685,8 +707,8 @@ the first increases with $|\mathcal{U}|$. Hence the coarsest feasible partition 
 The consequence is that no user configuration is required. The system reads the architecture
 description, computes $\max_u \Wu$ for each candidate granularity, and selects one; the same code
 path serves a 7B and a 70B model on the same card, differing only in the granularity chosen. When
-no supported granularity fits, the system reports this rather than failing opaquely---and, per
-\Cref{rem:matrixlimit}, it states explicitly when an unimplemented granularity would have
+no supported granularity fits, the system reports this rather than failing opaquely. Per
+\Cref{rem:matrixlimit}, it also states explicitly when an unimplemented granularity would have
 sufficed.
 
 %==============================================================================
@@ -695,8 +717,11 @@ sufficed.
 
 \subsection{Setup}
 
-All experiments run on a single desktop with an NVIDIA GTX~1050 (3.94\,GB usable), 8 CPU cores,
-15.5\,GB of host memory, and an NVMe disk. The model is
+All experiments run on a single laptop with a mobile NVIDIA GeForce GTX~1050 (GP107M, Pascal,
+3.94\,GB usable, no tensor cores), 8 CPU cores, 15.5\,GB of host memory, and an NVMe disk. We chose
+this specific card deliberately: it is not a reasonable choice for training at scale, which is the
+point---if the bound in \Cref{thm:vram} holds here, it holds on any GPU a practitioner without
+data-centre access is likely to own. The model is
 Qwen2.5-7B-Instruct~\cite{qwen2025} (7.62\,B parameters, 28 layers, fp16), fine-tuned on
 Alpaca~\cite{alpaca2023} with AdamW~\cite{loshchilov2019adamw}, $S=256$, mixed
 precision~\cite{micikevicius2018mixed}, in PyTorch~\cite{paszke2019pytorch} with
@@ -710,8 +735,8 @@ The implementation, the experiment configurations and the raw logs behind every 
 paper are available at a tagged, immutable revision~\cite{usfcode}: development of the method
 continues elsewhere in that repository, but the tag pins the exact code that produced the
 measurements reported here. Each exactness claim in \Cref{tab:exact} corresponds to an executable
-test, and the figures are regenerated from the logged run rather than redrawn, so the reported
-deviations can be reproduced rather than taken on trust.
+test, and the figures are regenerated directly from the logged run rather than redrawn by hand, so
+a reader can rerun the deviations reported below instead of taking them on trust.
 
 \subsection{Exactness}
 
@@ -749,17 +774,17 @@ model.
 \subsection{Memory}
 
 \Cref{tab:vram} reports peak device memory. Both adapters train the same frozen 7B model on the
-same card. The gap between them is precisely the $|\theta|\cdot s_{\text{opt}} + A$ term of
-\eqref{eq:vram}---\sthree{} keeps additional resident factors---and both satisfy the bound. That
-LoRA occupies \emph{less} memory than \sthree{} is not a defect of the system but a confirmation of
-\Cref{cor:agnostic}: \usf{} imposes its bound irrespective of what is being adapted.
+same card. The gap between them is exactly the $|\theta|\cdot s_{\text{opt}} + A$ term of
+\eqref{eq:vram}, since \sthree{} keeps additional resident factors, and both satisfy the bound. That
+LoRA occupies \emph{less} memory than \sthree{} is exactly what \Cref{cor:agnostic} predicts, not a
+flaw in the system: \usf{} imposes its bound irrespective of what is being adapted.
 
 \begin{table}[t]
 \centering
 \caption{Peak memory and trainable parameters (Qwen2.5-7B, 15.2\,GB on disk). Three memory measures
 are reported: \emph{alloc} is the peak of the PyTorch allocator, \emph{resv} additionally counts
 blocks the caching allocator retains, and \emph{smi} is total device occupancy including the CUDA
-context---the strictest measure, and the one that must fit. Perplexity is measured on 100 held-out
+context (the strictest measure, and the one that must fit). Perplexity is measured on 100 held-out
 Alpaca examples, identical data and seed across rows.}
 \label{tab:vram}
 \footnotesize
@@ -783,16 +808,16 @@ We report three measures rather than one because they differ substantially and o
 a fair test of the claim. The headline figure of 2.2\,GB is the allocator peak; total device
 occupancy including the CUDA context reaches 2891\,MB, or 71.7\,\% of the 4034\,MB the card exposes
 to CUDA. The claim survives under the strictest measure, which is the reason to state it. Note also
-that peak memory is not monotone in adapter size---LoRA $r{=}1$ occupies more than $r{=}2$ under
-\emph{resv} and \emph{smi}---because allocator fragmentation, not parameter count, dominates these
-two measures at this scale; \Cref{thm:vram} bounds the allocation, not the allocator's caching
-policy.
+that peak memory is not monotone in adapter size: LoRA $r{=}1$ occupies more than $r{=}2$ under
+\emph{resv} and \emph{smi}, because at this scale allocator fragmentation dominates these two
+measures far more than parameter count does. \Cref{thm:vram} bounds the allocation itself; the
+allocator's caching policy is a separate matter.
 
 \subsection{Learning end to end}
 
 \Cref{tab:vram} establishes that training reduces held-out perplexity for every adapter. A longer
-run---1100 Alpaca examples, one epoch, 275 micro-batches at $B{=}4$, hence 138 optimizer steps at
-$G{=}2$, 4\,h\,16\,min---reduced held-out perplexity from 11.96 to 5.50 at a peak of 2233\,MB, with
+run (1100 Alpaca examples, one epoch, 275 micro-batches at $B{=}4$, hence 138 optimizer steps at
+$G{=}2$, 4\,h\,16\,min) reduced held-out perplexity from 11.96 to 5.50 at a peak of 2233\,MB, with
 no step skipped due to gradient overflow. \Cref{fig:loss} plots the trajectory. We report these as
 evidence that the system trains, not as a quality claim: by \Cref{thm:exact} the resulting model is
 the model that ordinary training would have produced, so there is nothing about quality that
@@ -812,7 +837,7 @@ flattering one.
 \caption{Device memory over the full 4\,h\,16\,min run of Qwen2.5-7B (114\,766 samples at 100\,ms).
 The sawtooth is \Cref{alg:usf} itself: each tooth is one $\textsc{Load}$--compute--$\textsc{Free}$
 cycle of a 0.43\,GB decoder layer. The model is 15.2\,GB on disk, yet nothing approaches the
-card's 4034\,MB---the picture \Cref{thm:vram} predicts. The upward drift of the reserved curve is
+card's 4034\,MB, exactly the picture \Cref{thm:vram} predicts. The upward drift of the reserved curve is
 the caching allocator retaining freed blocks, not growth in what \usf{} keeps resident.}
 \label{fig:vram}
 \end{figure}
@@ -822,9 +847,9 @@ the caching allocator retaining freed blocks, not growth in what \usf{} keeps re
 \includegraphics[width=\columnwidth]{figures/loss_curve.pdf}
 \caption{Training loss over 138 optimizer steps (275 micro-batches at $B{=}4$, $G{=}2$) on 1100
 Alpaca examples. Held-out perplexity, measured on 100 unseen examples before and after, fell from
-11.96 to 5.50. No step was skipped for gradient overflow. By \Cref{thm:exact} this trajectory is
-the one ordinary residency training would have produced; we show it as evidence that the system
-trains, not as a quality claim.}
+11.96 to 5.50, with no step skipped for gradient overflow. By \Cref{thm:exact}, \usf{} reproduces
+exactly the trajectory that ordinary residency training would have produced: what the curve
+demonstrates is that the system learns; assessing how well is outside this paper's scope.}
 \label{fig:loss}
 \end{figure}
 
@@ -832,8 +857,8 @@ trains, not as a quality claim.}
 
 \Cref{tab:lm} compares the two schedules on the 7B model over 16 examples with $G=4$. Layer-major
 is $1.40\times$ faster and uses \emph{less} memory, the latter because its checkpoints are
-host-resident (\Cref{cor:depth}). \Cref{prop:G} predicts further gains at larger $G$; we did not
-measure them.
+host-resident (\Cref{cor:depth}). \eqref{eq:choiceG} predicts further gains at larger $G$; we did
+not measure them.
 
 \begin{table}[t]
 \centering
@@ -860,14 +885,14 @@ merely inferior; it is infeasible. A 4-bit NF4 quantization of Qwen2.5-7B requir
 transformer blocks, plus 1.09\,GB for the embedding matrix and a further 1.09\,GB for the
 language-modelling head, which this model does not tie to the embedding and which the reference
 implementation does not quantize: 5.43\,GB against a card that exposes 3.94\,GB. The prediction is
-borne out---the load terminates in an out-of-memory error---while \usf{} trains the same model at
+borne out: the load terminates in an out-of-memory error, while \usf{} trains the same model at
 an allocator peak of 2.27\,GB.
 
 The comparison is deliberately drawn in quantization's favour. The 5.43\,GB counts weights alone,
 before optimizer state, activations or the CUDA context, and is therefore a lower bound on what
 4-bit would need; the \usf{} figures are full measured runtime. The gap is wide enough that the
-asymmetry does not matter, which is why we can state the conclusion as a separation of feasibility
-rather than a preference. The two techniques are composable and address different axes:
+asymmetry does not matter, so the conclusion is about what is feasible, not about what is
+preferable. The two techniques are composable and address different axes:
 quantization purchases memory with accuracy, \usf{} purchases it with time, and only the latter is
 exact (\Cref{cor:noapprox}).
 
@@ -875,8 +900,7 @@ exact (\Cref{cor:noapprox}).
 \section{Scaling Analysis}
 \label{sec:scaling}
 
-\Cref{tab:claims} states what this paper establishes at each scale, and on what basis. We consider
-the distinction important enough to tabulate rather than to leave to prose.
+\Cref{tab:claims} states what this paper establishes at each scale, and on what basis.
 
 \begin{table}[t]
 \centering
@@ -922,8 +946,8 @@ $\mathrm{BW}$ bounds the I/O term of \eqref{eq:tio}.
 
 \textbf{The PEFT hypothesis is load-bearing.} \Cref{thm:vram} treats $|\theta|\cdot s_{\text{opt}}$
 as small. With many trainable parameters the optimizer state ceases to be negligible and
-partitioning it becomes the dominant concern---the regime of ZeRO~\cite{rajbhandari2020zero}, not
-of this paper. \usf{} is a method for PEFT, not for pre-training.
+partitioning it becomes the dominant concern, which is the setting ZeRO~\cite{rajbhandari2020zero}
+addresses. \usf{} targets PEFT; pre-training is out of scope.
 
 \textbf{Matrix granularity is not implemented} (\Cref{rem:matrixlimit}), which is why
 \Cref{tab:claims} assigns 405B a weaker status than 70B.
@@ -939,13 +963,15 @@ recalibration elsewhere.
 
 We have shown that the memory required to fine-tune a frozen language model is not a function of
 the model's size. It is a function of the model's largest streamable unit, because reverse-mode
-differentiation is local and residency is therefore a matter of scheduling rather than of
-correctness. The resulting method is exact---verified at zero deviation on the 7B model itself---
+differentiation is local: nothing about correctness ties a weight to the device once its VJP has
+been computed, so how long it stays resident is ours to schedule. The resulting method is exact
+(verified at zero deviation on the 7B model itself),
 adapter-agnostic, and governed by a cost model accurate to within 6\%. Its consequence is a
-displacement rather than an elimination of cost: model size becomes a question of time and storage.
+displacement of cost, not its elimination: model size becomes a question of time and storage.
 On a consumer GPU that a data-centre would consider obsolete, a 7B model can now be fine-tuned
 exactly; the same bound, at an implemented granularity, places a 70B model within reach of the same
-card. What remains scarce is time, and time is a more tractable adversary than a memory wall.
+card. The barrier that remains is time, which \Cref{sec:scaling} quantifies, and which---unlike
+memory---does not exclude anyone from starting.
 
 \bibliographystyle{IEEEtran}
 \bibliography{refs}

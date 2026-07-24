@@ -1,0 +1,5 @@
+{
+  "train_seed43": {
+    "ckpt_dir": "results/ablations_baselines_20260719_193209"
+  }
+}

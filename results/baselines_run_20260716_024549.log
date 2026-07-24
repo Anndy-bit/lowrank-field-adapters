@@ -1,0 +1,68 @@
+/home/gula/Documentos/Proyectos Github/lowrank-field-adapters/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+Using the latest cached version of the dataset since tatsu-lab/alpaca couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/gula/.cache/huggingface/datasets/tatsu-lab___alpaca/default/0.0.0/dce01c9b08f87459cf36a430d809084718273017 (last modified on Tue Jul 14 22:51:07 2026).
+/home/gula/Documentos/Proyectos Github/lowrank-field-adapters/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+
+[ablations] 4 variants x 150 examples (batch=4) ~ ETA 4.5h total (~1.1h/variant)
+
+################################################################
+# ABLATION [baselines]: s3_full
+################################################################
+[S3Trainer] trainable=3,896,452 / 7,619,512,964 (0.0511%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: NFR(N:2->4), SBS, SGC(inherent)
+[E1 B0] loss=3.1572 vram_peak=1637MB fwd=22079ms bwd=16925ms
+[E1 B10] loss=1.6316 vram_peak=1693MB fwd=4024ms bwd=29045ms
+[E1 B20] loss=1.1640 vram_peak=1751MB fwd=12428ms bwd=34712ms
+[E1 B30] loss=1.3613 vram_peak=1953MB fwd=12347ms bwd=47623ms
+[s3_full] ppl 9.521 -> 4.460 (Δ -5.061)  params=3,896,452  VRAM=2269.5MB
+
+################################################################
+# ABLATION [baselines]: lora_r1
+################################################################
+[lora] r=1 -> 2,523,136 trainable params
+[S3Trainer] trainable=2,523,136 / 7,618,139,648 (0.0331%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: SGC(inherent)
+[E1 B0] loss=3.1561 vram_peak=965MB fwd=19871ms bwd=21570ms
+[E1 B10] loss=1.7155 vram_peak=1007MB fwd=9244ms bwd=30825ms
+[E1 B20] loss=1.1667 vram_peak=1057MB fwd=11041ms bwd=40428ms
+[E1 B30] loss=1.3613 vram_peak=1232MB fwd=19473ms bwd=54307ms
+[lora_r1] ppl 9.521 -> 4.581 (Δ -4.939)  params=2,523,136  VRAM=1314.7MB
+
+################################################################
+# ABLATION [baselines]: lora_r2
+################################################################
+[lora] r=2 -> 5,046,272 trainable params
+[S3Trainer] trainable=5,046,272 / 7,620,662,784 (0.0662%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: SGC(inherent)
+[E1 B0] loss=3.1561 vram_peak=976MB fwd=17621ms bwd=19523ms
+[E1 B10] loss=1.6461 vram_peak=1036MB fwd=10103ms bwd=30216ms
+[E1 B20] loss=1.1284 vram_peak=1086MB fwd=7819ms bwd=26273ms
+[E1 B30] loss=1.3593 vram_peak=1261MB fwd=21643ms bwd=45624ms
+[lora_r2] ppl 9.521 -> 4.570 (Δ -4.951)  params=5,046,272  VRAM=1598.0MB
+
+################################################################
+# ABLATION [baselines]: lora_r8
+################################################################
+[lora] r=8 -> 20,185,088 trainable params
+[S3Trainer] trainable=20,185,088 / 7,635,801,600 (0.2643%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: SGC(inherent)
+[E1 B0] loss=3.1561 vram_peak=1084MB fwd=20444ms bwd=18653ms
+[E1 B10] loss=1.6762 vram_peak=1249MB fwd=9582ms bwd=23544ms
+[E1 B20] loss=1.1334 vram_peak=1274MB fwd=9896ms bwd=25565ms
+[E1 B30] loss=1.3669 vram_peak=1438MB fwd=13495ms bwd=54490ms
+[lora_r8] ppl 9.521 -> 4.538 (Δ -4.983)  params=20,185,088  VRAM=1605.9MB
+
+# S³ Ablations (RQ4)
+
+Same data + seed across all variants. Lower Δppl = better.
+
+| ablation | trainable | base ppl | after ppl | Δ ppl | final loss | min loss | VRAM MB | tok/s | wall min | grad svmo | grad nmf | grad stb | grad lora |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| s3_full | 3,896,452 | 9.5208 | 4.4598 | -5.061 | 1.0874 | 0.8801 | 2269.5 | 5.61 | 30.17 | 0.16066 | 0.94233 | 0.22809 | 0.0 |
+| lora_r1 | 2,523,136 | 9.5208 | 4.5814 | -4.9394 | 1.1022 | 0.8942 | 1314.7 | 4.95 | 34.22 | 0.0 | 0.0 | 0.0 | 6.19515 |
+| lora_r2 | 5,046,272 | 9.5208 | 4.57 | -4.9508 | 1.0882 | 0.8851 | 1598.0 | 5.03 | 33.65 | 0.0 | 0.0 | 0.0 | 4.22334 |
+| lora_r8 | 20,185,088 | 9.5208 | 4.5377 | -4.9831 | 1.0945 | 0.8906 | 1605.9 | 5.56 | 30.46 | 0.0 | 0.0 | 0.0 | 2.05857 |
+
+[ablations] comparison table + per-variant reports: ./results/ablations_baselines_20260716_024551

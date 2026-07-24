@@ -51,6 +51,13 @@ CAPACITY_SUITE = {
     "nmf_b2":      dict(enable_svmo=False, enable_stb=False, enable_nmf=True,  nmf_bottleneck=2),
     "svmo_h64":    dict(enable_svmo=True,  enable_stb=False, enable_nmf=False, svmo_hidden=64),
     "full_nmf_b1": dict(enable_svmo=True,  enable_stb=True,  enable_nmf=True,  nmf_bottleneck=1),
+    # Puntos que faltaban para cerrar docs/mejoras_futuras.md #4 sin interpolar:
+    "nmf_b3":      dict(enable_svmo=False, enable_stb=False, enable_nmf=True,  nmf_bottleneck=3),
+    # ~1.20M params, cerca del presupuesto de full_nmf_b1 (1.086M) -- flujo puro
+    # medido en esa zona en vez de interpolado entre nmf_b2 y nmf_only.
+    "no_nmf_h64":  dict(enable_svmo=True,  enable_stb=True,  enable_nmf=False, svmo_hidden=64),
+    # 1.31M params -- primer punto medido de la via espectral (SVMO+STB) por
+    # encima de los 685K de `no_nmf` (unico punto que existia antes).
 }
 
 # Suite 3 — BASELINES: S³ vs LoRA at matched parameter budget, same data/hardware.

@@ -6,17 +6,6 @@ __pycache__/
 dist/
 build/
 
-# Models & checkpoints (large files)
-checkpoints/
-svd_factors/
-*.pt
-*.bin
-*.safetensors
-
-# Results
-results/
-*.csv
-
 # Environment
 .env
 .venv/
@@ -26,10 +15,9 @@ venv/
 .vscode/
 .idea/
 
-# Paper artifacts
-paper/*.aux
-paper/*.log
-paper/*.out
-paper/*.pdf
-paper/*.bbl
-paper/*.blg
+# NOTA (2026-07-20): checkpoints/, svd_factors/, results/, *.pt, *.bin,
+# *.safetensors, *.csv y los PDF de paper/ dejaron de estar ignorados a
+# proposito -- respaldo de emergencia tras falla de hardware. Es toda la
+# data del proyecto (checkpoints entrenados, resultados de benchmarks,
+# factores SVD), no hay nada regenerable barato que valga la pena excluir
+# ahora mismo.

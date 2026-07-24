@@ -1,10 +1,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % S³: Spectral-Spatial-Smooth Fine-Tuning
 % IEEE Transactions format
-% Author: Nicolas Andrey Orozco Giraldo
-% nicolas.orozco@utp.edu.co
-%
-% [EXP: ...] = Replace with real experimental data
+% Borrador con datos reales (2026-07-18/19). Ver docs/paper_recomendaciones.md
+% para el razonamiento detras de cada correccion de honestidad.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \documentclass[conference]{IEEEtran}
@@ -44,34 +42,38 @@
 \newcommand{\diam}{\operatorname{diam}}
 \newcommand{\Span}{\operatorname{span}}
 
-\title{\sthree: Spectral-Spatial-Smooth Fine-Tuning \\ for Large Language Models on 2\,GB Consumer GPUs}
+\title{\sthree: Spectral-Spatial-Smooth Fine-Tuning \\ for Large Language Models on 4\,GB Consumer GPUs}
 
 \author{
-    \IEEEauthorblockN{Anonymous Researcher%Nicol\'as Andrey Orozco Giraldo%
-    }
-    \IEEEauthorblockA{%
-        Independent Researcher%\\
-        %Pereira, Colombia\\
-        %nicolas.orozco@utp.edu.co
-    }
+    \IEEEauthorblockN{Nicol\'as Andrey Orozco Giraldo\IEEEauthorrefmark{1},
+        Luis Eduardo Mu\~noz Guerrero\IEEEauthorrefmark{1},
+        Yony Fernando Ceballos\IEEEauthorrefmark{2}}
+    \IEEEauthorblockA{\IEEEauthorrefmark{1}Universidad Tecnol\'ogica de Pereira, Pereira, Colombia\\
+        nicolas.orozco@utp.edu.co, lemunozg@utp.edu.co}
+    \IEEEauthorblockA{\IEEEauthorrefmark{2}Facultad de Ingenier\'ia, Grupo de Ingenier\'ia y Sociedad,
+        Universidad de Antioquia, Medell\'in, Colombia\\
+        yony.ceballos@udea.edu.co}
 }
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-Fine-tuning large language models (LLMs) typically demands 8--16\,GB of GPU memory even with parameter-efficient methods such as LoRA, thereby excluding researchers limited to consumer-grade hardware. We introduce \sthree{} (Spectral-Spatial-Smooth), a novel parameter-efficient fine-tuning (PEFT) paradigm capable of adapting 7B-scale models on GPUs with as little as 2\,GB VRAM. \sthree{} combines three mathematically novel operators with no direct precedent in the PEFT literature: (1)~\textbf{Singular Value Modulation Operator} (\svmo), which modulates each singular value of frozen weight matrices pointwise via a learned nonlinear function---keeping singular vectors frozen and requiring only $O(H^2)$ parameters per matrix, independent of model dimension; (2)~\textbf{Neural Manifold Flow} (\nmf), the first application of continuous-depth Neural ODEs to LLM fine-tuning, deforming latent representations along smooth trajectories via a bottleneck velocity field integrated with fixed-step RK4; and (3)~\textbf{Spectral Transport Bridge} (\stb), a cross-attention coupling mechanism that transports latent representations through the spectral basis of weight matrices, creating bidirectional information flow between weight-space and representation-space adaptations. Together, these three operators constitute a mutually reinforcing adaptation stack totaling only 4.83M parameters ($0.060\%$ of a 7B model) and achieves a peak VRAM of $\sim$345\,MB. We establish ten formal theoretical results: an explicit $O(1/\sqrt{H})$ approximation rate for \svmo; uniform gradient stability via $\tanh$ saturation; corrected Gr\"onwall trajectory bounds for \nmf; RK4 integration guarantees; a mutual information lower bound proving that \stb{} creates non-zero coupling between adaptation spaces; local convergence acceleration through spectral preconditioning; a non-vacuous PAC-Bayes generalization bound---the first such guarantee for PEFT at 7B scale; exact gradient preservation under spectral compression (SGC); linear-in-epoch error accumulation for progressive ODE integration (NFR); and provably non-zero mutual information under stochastic STB bypass (SBS). [EXP: Empirical validation on Qwen2.5-7B, Mistral-7B-v0.3, and Llama-3-8B across five benchmarks (MMLU, HellaSwag, ARC-Challenge, GSM8K, AlpacaEval~2.0) against LoRA, QLoRA, and full fine-tuning is underway. Preliminary VRAM measurements confirm peak usage $\leq$ 350\,MB. All [EXP:\ldots] markers will be replaced with real experimental data.]
+Fine-tuning large language models (LLMs) typically demands 8--16\,GB of GPU memory even with parameter-efficient methods such as LoRA, thereby excluding researchers limited to consumer-grade hardware. We introduce \sthree{} (Spectral-Spatial-Smooth), a parameter-efficient fine-tuning (PEFT) paradigm that adapts 7B-scale models on GPUs with as little as 4\,GB VRAM by combining disk-streamed layer-major execution with three coupled operators: (1)~\textbf{Singular Value Modulation Operator} (\svmo), which modulates each singular value of frozen weight matrices pointwise via a learned nonlinear function---keeping singular vectors frozen and requiring only $O(H^2)$ parameters per matrix, independent of model dimension; (2)~\textbf{Neural Manifold Flow} (\nmf), a continuous-depth Neural ODE that deforms latent representations along smooth trajectories via a bottleneck velocity field integrated with fixed-step RK4; and (3)~\textbf{Spectral Transport Bridge} (\stb), a cross-attention coupling mechanism that transports latent representations through the spectral basis of weight matrices, linking weight-space and representation-space adaptations. Together these operators total 3.90M trainable parameters (0.0511\% of Qwen2.5-7B-Instruct's 7.62B parameters). We report ten formal results characterizing each operator's approximation, stability, and coupling properties; we are explicit that these vary in strength (\S\ref{sec:discussion}) --- the SVMO approximation rate and the exact-gradient spectral-compression result are load-bearing, while the mutual-information and PAC-Bayes bounds are directionally informative but numerically loose and should be read as such. On the empirical side, measured on a real NVIDIA GTX 1050 (4\,GB): peak VRAM ranges 1.6--3.4\,GB depending on workload (training vs.\ batched evaluation); across seven zero-shot downstream tasks (BoolQ, PIQA, HellaSwag, WinoGrande, ARC-Easy, ARC-Challenge, OpenBookQA; $n{=}500$ examples/task) \sthree{} matches LoRA rank-8 within a few points per task while using $5.2\times$ fewer trainable parameters; an ablation over operator pathways shows the spectral pathway (SVMO+STB) matches the flow pathway (NMF) with 15\% fewer parameters, and combining both beats either alone at matched budget; and a solver-invariance sweep ($N \in \{1,2,4,8,16\}$ RK4 steps, no retraining) shows perplexity varies by only 0.004\% of its mean, supporting that NMF learns a genuine continuous flow rather than a step-count-specific shortcut. \sthree{}'s intended audience is narrower than ``anyone without a big GPU'': users for whom on-demand cloud GPUs are not actually available --- unstable connectivity, data that cannot leave the device, or sustained unattended runs beyond free-tier session limits (\S\ref{sec:motivation}).
 \end{abstract}
 
 %==============================================================================
 \section{Introduction}
 %==============================================================================
 
-\subsection{Motivation: The Hardware Barrier in LLM Research}
+\subsection{Motivation: Who Actually Needs This}
+\label{sec:motivation}
 
-Fine-tuning large language models for downstream tasks is the dominant paradigm in applied NLP~\cite{hu2021lora,dettmers2023qlora}. However, full fine-tuning of a 7--8B parameter model demands over 60\,GB of GPU memory---hardware accessible only via expensive data-center accelerators (NVIDIA A100, H100). Parameter-efficient fine-tuning methods such as LoRA~\cite{hu2021lora}, QLoRA~\cite{dettmers2023qlora}, DoRA~\cite{liu2024dora}, and VeRA~\cite{kopiczko2024vera} substantially reduce this burden, yet even the most frugal among them require 4--8\,GB VRAM. This excludes the vast majority of consumer GPUs, including the widely available NVIDIA GTX 1050 (2--4\,GB). This creates a \textbf{hardware barrier}: independent researchers, students, and laboratories in resource-constrained settings are effectively excluded from adapting state-of-the-art open-weight LLMs to their domains of interest.
+Fine-tuning large language models for downstream tasks is the dominant paradigm in applied NLP~\cite{hu2021lora,dettmers2023qlora}. Full fine-tuning of a 7--8B parameter model demands over 60\,GB of GPU memory---hardware accessible only via data-center accelerators (NVIDIA A100, H100). Parameter-efficient fine-tuning methods such as LoRA~\cite{hu2021lora}, QLoRA~\cite{dettmers2023qlora}, DoRA~\cite{liu2024dora}, and VeRA~\cite{kopiczko2024vera} substantially reduce this burden, yet even the most frugal among them are typically deployed with 8--16\,GB of VRAM, comfortably above what a machine such as an NVIDIA GTX 1050 (4\,GB) provides.
 
-We address this barrier by redefining the \textit{floor} of attainable VRAM consumption. Our objective is not an incremental reduction, but a qualitative shift: enabling 7B-scale fine-tuning within a \textbf{2\,GB VRAM budget}, thereby opening LLM adaptation to virtually any computer equipped with a discrete GPU.
+A natural objection deserves a direct answer rather than a rhetorical one: free cloud notebooks (e.g., Google Colab) commonly provision a 16\,GB GPU, which is \emph{more} than sufficient to run standard LoRA on a 7B model with off-the-shelf tooling. For a user with stable, unrestricted access to such a service, \sthree{} offers no advantage --- LoRA on a free-tier cloud GPU is simpler and very likely faster than what we report here. The audience for whom \sthree{} is not redundant is narrower, and we state it explicitly: (i)~users without stable or sufficient internet connectivity to sustain a multi-hour cloud session; (ii)~settings where training data cannot leave the local device for privacy, compliance, or data-sovereignty reasons; (iii)~users in regions where access to the relevant cloud services is restricted or unavailable; (iv)~workloads that need long, unattended runs beyond the session limits that free cloud tiers enforce; and (v)~sustained, repeated use, where a low-cost owned GPU has zero marginal cost per run versus a recurring paid subscription. This is a real population, but it is smaller than ``anyone without much money,'' and we would rather name it precisely than lean on an easily-falsified appeal to hardware scarcity in the abstract.
+
+Given that audience, we redefine the \textit{floor} of attainable VRAM consumption for 7B-scale fine-tuning. Our objective is not an incremental reduction relative to LoRA/QLoRA, but enabling adaptation within the budget of hardware that (i)~is already owned by the intended audience and (ii)~costs on the order of \$100--150 used, rather than requiring a rented accelerator at all.
 
 \subsection{Our Approach: Three Mutually Coupled Operators}
 
@@ -85,7 +87,7 @@ Departing from the dominant paradigm of additive low-rank perturbations in the o
     \item \textbf{\stb{} (Spectral Transport Bridge).} \svmo{} modulates weight spectra; \nmf{} deforms latent representations. Without a coupling mechanism, these adaptations proceed independently and cannot coordinate. \stb{} bridges them via cross-attention in the spectral basis: $h \mapsto U_k^T h = s$ (project latent representation into the left singular vector basis), then $s \mapsto c_\phi(s, \Sigma_k)$ (cross-attend the spectral signature with the current modulated singular values), then back to latent space via $U_k$. This bidirectional channel enables weight-space and representation-space adaptations to \textit{coordinate} during training.
 \end{enumerate}
 
-Together, these three operators constitute a mutually reinforcing adaptation stack totaling only \textbf{4.83M trainable parameters} ($0.060\%$ of a 7B model), achieving a peak VRAM of $\sim$\textbf{345\,MB}---comfortably within the 2\,GB budget of a GTX 1050.
+Together, these three operators constitute a mutually reinforcing adaptation stack. \Cref{tab:params} works out a generic 32-layer, $d{=}4096$ architecture to \textbf{4.83M} parameters ($0.060\%$ of 7B) as a design illustration; on the model we actually train and evaluate throughout \Cref{sec:experiments} (Qwen2.5-7B-Instruct, 28 layers, $d{=}3584$), the measured trainable count is \textbf{3.90M} (\textbf{0.0511\%}). Measured peak VRAM on a real GTX 1050 (4\,GB card) ranges \textbf{1.6--3.4\,GB} depending on workload (\Cref{tab:vram}); the $\sim$345\,MB figure in \Cref{tab:vram_detail} is a per-layer analytical decomposition, not an end-to-end measurement, and \Cref{sec:vram-gap} discusses the gap between the two directly.
 
 \subsection{Theoretical Contributions}
 
@@ -118,7 +120,9 @@ LoRA~\cite{hu2021lora} learns additive low-rank matrices $\Delta W = BA$ with $B
 
 \subsection{Spectral Methods}
 
-Zhang \& Pilanci~\cite{zhang2024spectral} propose the Spectral Adapter, which computes the SVD of pretrained weights and applies either additive shifts to singular values or orthogonal rotations of the top-$k$ singular vectors. Several follow-ups explore spectral fine-tuning in specific domains~\cite{qin2026spectral,li2026unified,moayededi2026disco,hico2026}.
+Zhang \& Pilanci~\cite{zhang2024spectral} propose the Spectral Adapter, which computes the SVD of pretrained weights and applies either additive shifts to singular values or orthogonal rotations of the top-$k$ singular vectors.
+
+\textit{Editorial note (remove before submission): the previous draft cited several 2026 follow-up papers here (TALAN, a spectral-PEFT unification, DiSCo, HiCoLoRA) with placeholder bibliography entries that were never filled in with a verified author/venue. Rather than publish placeholder citations formatted as real references --- which reads as fabricated --- we removed them. A real literature pass over 2025--2026 spectral-PEFT and representation-steering work should replace this paragraph before submission; see \texttt{docs/paper\_recomendaciones.md}.}
 
 \textbf{Our \svmo{} differs fundamentally.} (i)~$U$ and $V$ are \textit{completely frozen}: we never rotate or shift singular vectors. (ii)~The modulation is a \textit{learned, pointwise, nonlinear} function $m_\theta(\sigma_i)$ applied independently to each singular value---not an additive constant or uniform rotation. (iii)~Our parameter count is $O(H^2)$ per matrix, independent of both model dimension $d$ and SVD rank $k$, versus $O(dk)$ for the Spectral Adapter. (iv)~We provide formal approximation rates (Theorem~1) and gradient stability guarantees (Theorem~2), neither of which appears in prior spectral PEFT work.
 
@@ -128,9 +132,9 @@ Neural ODEs~\cite{chen2018neuralode} introduced continuous-depth models where th
 
 \subsection{Latent-Space and Coupled Adaptations}
 
-Residual adapters that modify hidden states via $h' = h + \text{MLP}(h)$ have been extensively studied~\cite{houlsby2019adapters,pfeiffer2020adapterfusion}. Recent work extends this to frozen LLMs: TALAN~\cite{talan2026} uses task-aligned latent adaptation networks, and Liu~\cite{liu2026decodable} applies residual-stream steering with multi-layer MLPs. These methods apply \textit{single-step static perturbations}. In contrast, \nmf{} substitutes the static MLP with a continuous ODE flow, enabling curved trajectories and explicitly time-dependent dynamics---a structural increase in expressivity at equivalent parameter counts.
+Residual adapters that modify hidden states via $h' = h + \text{MLP}(h)$ have been extensively studied~\cite{houlsby2019adapters,pfeiffer2020adapterfusion}. These methods apply \textit{single-step static perturbations}. In contrast, \nmf{} substitutes the static MLP with a continuous ODE flow, enabling curved trajectories and explicitly time-dependent dynamics---a structural increase in expressivity at equivalent parameter counts.
 
-While optimal transport has been applied to representation alignment~\cite{abdullaev2026ot}, it has not been used to couple weight-space and representation-space adaptations during fine-tuning. Our \stb{} introduces a spectral cross-attention channel bridging these two domains, a mechanism without direct precedent in the PEFT literature.
+Our \stb{} introduces a spectral cross-attention channel bridging weight-space and representation-space adaptations, a mechanism without direct precedent in the residual-adapter literature we are aware of. (\textit{Editorial note: this paragraph previously cited two additional placeholder references, TALAN and an optimal-transport representation-steering paper, whose bibliography entries were never filled in with verified sources. Removed for the same reason as above --- do not restore without a verified citation.})
 
 %==============================================================================
 \section{Method: The \sthree{} Architecture}
@@ -139,6 +143,7 @@ While optimal transport has been applied to representation alignment~\cite{abdul
 We present the three operators with full formal definitions and complete proofs for all ten theorems.
 
 \subsection{Singular Value Modulation Operator (\svmo)}
+\label{sec:svmo}
 
 \begin{definition}[\svmo{} Forward Pass]
 Let $W \in \RR^{d_{\text{out}} \times d_{\text{in}}}$ be a frozen pretrained weight matrix. Compute the compact SVD offline \textit{once}:
@@ -468,6 +473,7 @@ With $N=4$, $T=1.0$, $L_f \approx 4.9\times 10^{-4}$:
 \textbf{Geometric Intuition.} Standard residual adapters apply a static translation $h \to h + \text{offset}$---a straight-line displacement. NMF applies a continuous flow with non-zero curvature: the velocity field can produce large, coarse displacements early in the flow ($t \approx 0$) and fine-grained adjustments later ($t \approx T$). Discrete MLPs cannot generate trajectories with curvature; ODE flows naturally produce curves, spirals, and arbitrary smooth paths. This qualitative expressivity---curvature, explicit time dependence, continuous evolution---compensates for the small parameter count.
 
 \subsection{Spectral Transport Bridge (\stb)}
+\label{sec:stb}
 
 \subsubsection{The Core Problem: Coupling Disjoint Adaptation Spaces}
 
@@ -546,6 +552,11 @@ where the factor $1/d$ accounts for the dimensional reduction from the $d$-dimen
 \textbf{Concrete values.} With $k = 128$, $\beta = 0.5$, $d = 4096$: $I_{\text{STB}} \geq (0.25 \times 128)/(2 \times 4096) \cdot H(X) \approx 0.0039 \cdot H(X)$. Even this small fraction of shared information accumulates across thousands of gradient steps ($\tau$ iterations multiply effective mutual information accumulation), enabling coordinated adaptation.
 
 \textbf{Significance.} Theorem~\ref{thm:stb-mi} proves that STB creates \textbf{non-zero coordination} between SVMO and NMF. Without STB, the two adaptation mechanisms cannot coordinate---Theorem~\ref{thm:stb-mi} guarantees $I = 0$. The coupling enables mutually reinforcing fine-tuning: weight modulation and representation flow discover complementary strategies that reinforce each other.
+
+\begin{quote}
+\small
+\textbf{Honest reading of Theorems~5--6.} The bounds above are qualitative (``$>0$''), not quantitative guarantees of a large effect: with our default hyperparameters ($k{=}128$, $\beta{=}0.5$, $d{=}4096$), the mutual-information lower bound evaluates to $I_{\mathrm{STB}} \gtrsim 0.0039 \cdot H(X)$ and the Hessian-conditioning improvement to $\kappa_{\mathrm{STB}}/\kappa_{\mathrm{no\text{-}STB}} \approx 0.992$ --- both real but numerically small. The theorems establish that STB \emph{can} couple the two operators, not that this coupling is the dominant driver of quality. The evidence that STB matters in practice is empirical, not this bound: \Cref{sec:experiments} shows the spectral pathway (SVMO+STB) needs STB to move perplexity at all (SVMO alone: $+0.02$ ppl for 226K extra params; SVMO+STB: $+0.25$ ppl for 685K), which is a much stronger statement than the information-theoretic bound by itself.
+\end{quote}
 
 \subsubsection{Theorem 6: Local Convergence Acceleration}
 
@@ -637,6 +648,7 @@ NMF (2 flows, $d_b{=}8$) & $2 \times 65.5\text{K} = 131$K & 32 & 4.19M \\
 Comparison: Full fine-tuning (8{,}030M, 100\%); LoRA $r{=}8$, all linear layers ($\sim$16.8M, 0.21\%)---S\textsuperscript{3} uses \textbf{3.5$\times$ fewer} parameters; LoRA $r{=}64$ ($\sim$134M, 1.67\%)---S\textsuperscript{3} uses \textbf{27.7$\times$ fewer}. S\textsuperscript{3} achieves the lowest trainable parameter ratio of any PEFT method operating at full fp16 precision on all layers.
 
 \subsubsection{VRAM Peak --- Concrete Analysis}
+\label{sec:vram-gap}
 
 Training employs layer-by-layer sequential forward/backward with CPU$\leftrightarrow$GPU weight swapping. Only one layer's weights reside in GPU at any time. VRAM breakdown for a Llama-3-class architecture ($d{=}4096$, 32 layers):
 
@@ -664,7 +676,7 @@ CUDA context + PyTorch overhead & $\sim$50 \\
 \end{tabular}
 \end{table}
 
-Safety margin on a 2\,GB GPU: 2{,}048\,MB $-$ 345\,MB = \textbf{1{,}703\,MB free}. Fits comfortably on GTX 1050 (2\,GB), GTX 1050 Ti (4\,GB), and any consumer GPU.
+\textbf{Where this estimate and end-to-end measurement diverge.} \Cref{tab:vram_detail} accounts for one active layer's weights, adapter parameters, gradient-checkpointed activations, and optimizer state --- the steady-state footprint \emph{while one layer is running}. It does not include: the token embedding and LM head matrices (kept on CPU in our implementation, but transiently touched at the input/output boundary), the batching used during evaluation (\Cref{tab:vram} batches multiple sequences per forward pass for throughput, which multiplies the activation term), or PyTorch/CUDA allocator fragmentation, which in practice required setting \texttt{PYTORCH\_CUDA\_ALLOC\_CONF=expandable\_segments:True} to avoid spurious out-of-memory errors on the 4\,GB card even when the nominal peak was well under 4\,GB. End-to-end measured peaks (\Cref{tab:vram}) are consequently 1.6--3.4\,GB, five to ten times the $\sim$345\,MB single-layer figure --- both numbers are honest, they answer different questions (marginal cost of one active layer vs.\ total process footprint), and we report both rather than only the more flattering one.
 
 \subsection{Theorem 7: PAC-Bayes Generalization Bound}
 
@@ -707,6 +719,11 @@ The PAC-Bayes bound becomes:
 \begin{proof}[Sketch]
 Standard PAC-Bayes~\cite{mcallester1999pac} with Gaussian prior/posterior yields $\KL(Q\|P) = \frac{|\theta|}{2}\log(1 + \sigma_Q^2/\sigma_P^2) + \frac{\|\Theta\|^2}{2\sigma_P^2} - \frac{|\theta|}{2}$. The key innovation is replacing $|\theta|$ with $d_{\text{eff}}$ via a \textbf{structure-aware prior}~\cite{catoni2007pac}: the prior $P_c$ places zero mass on parameter directions that S\textsuperscript{3} structurally cannot modulate---off-diagonal spectral entries unreachable by SVMO's diagonal-only modulation, high-frequency Fourier modes unreachable by the bottleneck NMF ($d_b \ll d$), and latent directions outside the $k$-dimensional STB channel. This reduces KL from $O(|\theta|) \sim 10^6$ to $O(d_{\text{eff}}) \sim 10^3$, making the bound tractable. $\square$
 \end{proof}
+
+\begin{quote}
+\small
+\textbf{Honest reading of Theorem~7.} ``Non-vacuous'' here means only that the bound is below the trivial ceiling of 100\% error --- 26.5\% is still a \emph{loose} guarantee, not a tight one, and it depends on a specific choice of $\|\Theta\|_F$, $\sigma_P$, and the structure-aware prior construction, none of which we validated against an independent held-out generalization measurement in this draft. We report it because a non-vacuous PAC-Bayes bound at 7B scale is unusual and the construction (restricting the prior's support to the directions S\textsuperscript{3} can structurally reach) is the interesting idea; we do not present it as a tight or load-bearing guarantee, and a reviewer should weigh it accordingly relative to the empirical results in \Cref{sec:experiments}.
+\end{quote}
 
 \subsection{Algorithmic Innovations: Theorems 8--10}
 
@@ -760,148 +777,174 @@ For any $p_{\text{STB}} > 0$, $I_{\text{SBS}} > 0$---coupling is preserved. With
 Theorem~\ref{thm:stb-mi} gives $I_{\text{STB}} \geq \frac{\beta^2 k}{2d} H(X)$ when STB active, $I=0$ when bypassed. By linearity of expectation over Bernoulli trials: $\mathbb{E}[I_{\text{SBS}}] = p_{\text{STB}} \cdot I_{\text{STB}}$. Theorem~\ref{thm:stb-conv} bounds $\kappa_{\text{STB}} \leq \min\{1+\beta^2 k/d,\; 1/\beta^2\} \cdot \kappa_{\text{no-STB}}$. With effective coupling strength $\beta_{\text{eff}} = \beta \cdot p_{\text{STB}}$ in expectation, substituting into Theorem~6 yields the stated Hessian bound. SBS also acts as structural dropout on the coupling channel, improving robustness. $\square$
 \end{proof}
 
-\textbf{Combined impact (GTX 1050, LOW tier).} SGC reduces internal GPU gradient traffic $32\times$; NFR saves $\sim 33\%$ NMF FLOPs over 3 epochs; SBS with $p_{\text{STB}}=0.3$ eliminates $\sim 70\%$ STB FLOPs. All three preserve training quality---guaranteed by Theorems~\ref{thm:sgc}--\ref{thm:sbs}. Estimated wall-clock: $\sim 30$h baseline $\to$ $\sim 25$--$27$h on GTX 1050.
+\textbf{Combined impact (GTX 1050, LOW tier) --- theoretical, not measured.} SGC reduces internal GPU gradient traffic $32\times$; NFR saves $\sim 33\%$ NMF FLOPs over 3 epochs; SBS with $p_{\text{STB}}=0.3$ eliminates $\sim 70\%$ STB FLOPs. All three preserve training quality \emph{exactly or asymptotically}---guaranteed by Theorems~\ref{thm:sgc}--\ref{thm:sbs}, which bound quality loss, not wall-clock gain. The wall-clock estimate ($\sim 30$h $\to$ $\sim 25$--$27$h) that appeared in an earlier draft was a FLOP-based projection, not a measured ablation with these optimizations toggled on/off; \Cref{tab:vram} reports real wall-clock for runs where NFR and SBS/SGC were active throughout (we did not run a matched comparison with them disabled), so the specific 10--17\% figure should be treated as an engineering estimate awaiting a direct on/off measurement, not a reported result.
 
 %==============================================================================
 \section{Experiments}
+\label{sec:experiments}
 %==============================================================================
 
-\textcolor{red!70!black}{\textbf{[EXP: ALL DATA IN THIS SECTION IS PLACEHOLDER.]}} Replace each \texttt{[EXP: ...]} marker with real experimental results obtained by running the provided code. Full experimental protocol provided in Supplementary Material.
+All results in this section are measured, not projected: every number comes from a run on real hardware, logged by \texttt{src/training/run\_report.py} (per-run \texttt{provenance.json}, \texttt{steps.csv}, \texttt{comparison.md}) or by the standard \texttt{lm-eval-harness}. We deliberately narrowed the scope of this section relative to an earlier draft that named three base models and five benchmarks (MMLU, GSM8K, AlpacaEval among them) before any of that had actually been run. What follows is what we ran.
 
 \subsection{Setup}
 
-\textbf{Models.} Qwen2.5-7B-Instruct, Mistral-7B-v0.3, Llama-3-8B.
+\textbf{Model.} Qwen2.5-7B-Instruct (7{,}615{,}616{,}512 frozen parameters), the only base model evaluated in this draft.
 
-\textbf{Training data.} Alpaca (52K instruction-response pairs)~\cite{alpaca2023}; OpenOrca (50K subset) for complexity stress-test; FLAN v2 (20K subset) for multi-task diversity.
+\textbf{Hardware.} A single NVIDIA GTX 1050, 3.94\,GB usable VRAM, streamed layer-by-layer from local NVMe via the USF disk-streaming loader (companion paper); no cloud hardware was used for any \sthree{} or LoRA number reported here.
 
-\textbf{Evaluation benchmarks.} MMLU (57 subjects, 14{,}042 questions, 0-shot), HellaSwag (10{,}042 examples, 0-shot), ARC-Challenge (1{,}172 hard science questions, 0-shot), GSM8K (1{,}319 math problems, 0-shot chain-of-thought), AlpacaEval~2.0 (805 instructions, length-controlled win rate vs.\ GPT-4-1106).
+\textbf{Training data.} Alpaca~\cite{alpaca2023} (instruction-response pairs), packed and length-sorted into batches.
 
-\textbf{Baselines.} LoRA ($r=8$, all linear layers, $\sim$16.8M params), LoRA ($r=64$, $\sim$134M params), QLoRA ($r=8$, NF4 quantized base), full fine-tuning (all 8.03B params), base model (zero-shot, no adaptation).
+\textbf{Evaluation benchmarks.} Seven zero-shot multiple-choice/boolean tasks from \texttt{lm-eval-harness}: BoolQ, PIQA, HellaSwag, WinoGrande, ARC-Easy, ARC-Challenge, OpenBookQA, each capped at 500 examples for tractable wall-clock time on this hardware. We did not run MMLU, GSM8K, or AlpacaEval~2.0; extending to those is future work, not a claim we make here.
 
-\textbf{\sthree{} hyperparameters.} SVMO: $k=128$, $H=32$, $\alpha=0.3$; NMF: $d_b=8$, $T=1.0$, $N=4$, RK4; STB: $\beta=0.5$. Training: micro-batch 1 token, gradient accumulation 128, AdamW ($\beta_1=0.9$, $\beta_2=0.999$, lr=$10^{-3}$, cosine schedule $+$ 5\% warmup), 3 epochs, fp16 AMP, max grad norm 1.0.
+\textbf{Baselines.} Base model (frozen, zero-shot, no adapter) and LoRA rank~8 on all linear projections ($\sim$20.2M trainable params, the literature-standard configuration). We do not report QLoRA or full fine-tuning numbers --- both were part of the original experimental plan but were not run on this hardware, and we would rather omit them than present projected numbers as measurements.
 
-\textbf{Hardware.} S\textsuperscript{3} and QLoRA trained on target consumer GPU (2\,GB VRAM). LoRA and full fine-tuning baselines on cloud A100-40GB. VRAM monitored via \texttt{nvidia-smi} polling at 100\,ms intervals.
+\textbf{\sthree{} hyperparameters.} SVMO: $k=128$, $H=32$, $\alpha=0.3$; NMF: $d_b=8$, $T=1.0$, $N=4$, RK4; STB: $\beta=0.5$. AdamW, lr $10^{-3}$, fp16 AMP, gradient checkpointing, layer-major streaming (companion USF paper, Thm.~4).
 
-\subsection{Main Results}
+\subsection{Downstream Accuracy vs.\ LoRA}
+\label{sec:main-results}
 
 \begin{table}[t]
 \centering
-\caption{\textbf{[EXP-TABLE: Placeholder.]} Downstream accuracy (\%). Best non-full-FT per benchmark in \textbf{bold}.}
+\caption{Zero-shot accuracy, $n{=}500$ examples/task, Qwen2.5-7B-Instruct. Single seed (\S\ref{sec:stats} reports the significance sweep).}
 \label{tab:main}
 \footnotesize
-\setlength{\tabcolsep}{1pt}
-\begin{tabular}{@{}lccccc@{}}
-\toprule
-\textbf{Method} & \textbf{MMLU} & \textbf{HSwag} & \textbf{ARC-C} & \textbf{GSM8K} & \textbf{AlpEval} \\
-\midrule
-Base model & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] \\
-\sthree{} \smash{(ours)} & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] \\
-LoRA $r{=}8$ & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] \\
-LoRA $r{=}64$ & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] \\
-QLoRA $r{=}8$ & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] \\
-Full FT & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\textbf{[EXP: Statistical analysis.]} $n{=}3$ independent runs per configuration (different seeds). Primary test: two-sided Welch's $t$-test for \sthree{} vs.\ LoRA $r{=}8$. Non-inferiority margin: $\Delta_{\mathrm{NI}}{=}1.0$ pp. Effect size via Cohen's $d$. Bootstrap 95\% CI (10,000 resamples).
-
-\subsection{VRAM and Computational Efficiency}
-
-\begin{table}[t]
-\centering
-\caption{\textbf{[EXP-TABLE: Placeholder.]} VRAM peak (MB) and training time (hours).}
-\label{tab:vram}
-\footnotesize
 \setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}lccr@{}}
-\toprule
-\textbf{Method} & \textbf{VRAM} & \textbf{Params} & \textbf{Time} \\
-\midrule
-\sthree{} (ours) & [EXP: 345\,MB] & 4.83M & [EXP: 30h] \\
-LoRA $r{=}8$  & [EXP: 8\,GB]   & 16.8M  & [EXP: 0.5h] \\
-QLoRA $r{=}8$ & [EXP: 4.5\,GB] & 16.8M  & [EXP: 2h]   \\
-LoRA $r{=}64$ & [EXP: 10\,GB]  & 134M   & [EXP: 0.8h] \\
-Full FT       & 60\,GB         & 8.03B  & [EXP: 2h]   \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\textbf{FLOP overhead.} S\textsuperscript{3} adds $\sim$2\% FLOPs compared to running the frozen base model. The training bottleneck on consumer hardware is CPU$\leftrightarrow$GPU memory bandwidth via PCIe ($\sim$16\,ms per layer swap $\times$ 64 swaps per step).
-
-\textbf{Training acceleration via Theorems 8--10.} Three structural properties of S\textsuperscript{3} enable formal training speedups with zero quality loss:
-\begin{itemize}[leftmargin=*]
-    \item \textbf{SGC (Theorem~8)}: The gradient compression $g \cdot U_k U_k^T$ reduces internal GPU gradient memory traffic $32\times$ (from $B \cdot d_{\text{out}}$ to $B \cdot k$ per layer). This lowers memory bandwidth pressure, translating to $\sim$5\% wall-clock reduction on bandwidth-constrained GPUs.
-    \item \textbf{NFR (Theorem~9)}: Progressive ODE integration ($N_1=2$, $N_e=4$ for $e \geq 2$) reduces NMF FLOPs by $\approx 33\%$ over 3 epochs, saving $\sim$50 min on GTX 1050.
-    \item \textbf{SBS (Theorem~10)}: Stochastic STB bypass with $p_{\text{STB}}=0.3$ eliminates $\sim 70\%$ of STB FLOPs, saving $\sim$2.2 hours on GTX 1050.
-\end{itemize}
-\textbf{Combined effect:} baseline $\sim$30h $\to$ $\sim$25--27h on GTX 1050, a 10--17\% wall-clock reduction, while preserving training quality via formal guarantees (exact gradient equality for SGC, linear error accumulation for NFR, $I_{\text{SBS}} > 0$ for any $p_{\text{STB}} > 0$ for SBS).
-
-\subsection{Ablation Study}
-
-\begin{table}[t]
-\centering
-\caption{\textbf{[EXP-TABLE: Placeholder.]} Ablation: marginal contribution per component. Qwen2.5-7B, Alpaca 52K.}
-\label{tab:ablation}
-\footnotesize
-\setlength{\tabcolsep}{2.8pt}
 \begin{tabular}{@{}lccc@{}}
 \toprule
-\textbf{Configuration} & \textbf{MMLU} & \textbf{HSwag} & \textbf{VRAM} \\
+\textbf{Task} & \textbf{Base} & \textbf{LoRA $r{=}8$} & \textbf{\sthree{} (ours)} \\
 \midrule
-Full \sthree{} & [EXP: xx.x] & [EXP: xx.x] & [EXP: 345] \\
-$-$ \stb{}    & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] \\
-$-$ \nmf{}    & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] \\
-$-$ \svmo{}   & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] \\
-\svmo{} only   & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] \\
-\nmf{} only    & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] \\
-\stb{} only    & [EXP: xx.x] & [EXP: xx.x] & [EXP: xx.x] \\
+BoolQ         & 0.842 & 0.866 & 0.848 \\
+PIQA          & 0.812 & 0.812 & 0.822 \\
+HellaSwag     & 0.550 & 0.554 & 0.550 \\
+WinoGrande    & 0.734 & 0.752 & 0.754 \\
+ARC-Easy      & 0.806 & 0.828 & 0.816 \\
+ARC-Challenge & 0.504 & 0.566 & 0.528 \\
+OpenBookQA    & 0.348 & 0.340 & 0.332 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\textbf{[EXP: Expected findings.]} If SVMO contributes the largest accuracy gain (weight modulation), NMF adds consistent improvement (representation smoothness), and STB provides measurable positive contribution through coupling, the core thesis of mutually reinforcing adaptation is empirically supported.
+\sthree{} matches LoRA $r{=}8$ within a few points on every task --- ahead on 3/7 (BoolQ, PIQA, WinoGrande), behind on 3/7 (ARC-Easy, ARC-Challenge, OpenBookQA), tied on HellaSwag --- while training \textbf{5.2$\times$ fewer parameters} (3.90M vs.\ 20.2M). No task shows a large gap in either direction. We report this as parity, not superiority: the honest claim is that the VRAM reduction did not cost downstream quality on this evaluation, not that \sthree{} outperforms LoRA.
 
-\subsection{Scaling and Convergence}
+\subsection{VRAM and Wall-Clock}
 
-\textbf{[EXP: Optional scaling experiment.]} Test S\textsuperscript{3}-small ($k{=}64$, $H{=}16$, $d_b{=}4$, $\alpha{=}0.2$, $\beta{=}0.3$, $N{=}2$, $T{=}0.5$) and S\textsuperscript{3}-large ($k{=}256$, $H{=}64$, $d_b{=}16$, $\alpha{=}0.5$, $\beta{=}0.7$, $N{=}8$, $T{=}2.0$).
+\begin{table}[t]
+\centering
+\caption{Measured end-to-end VRAM peak and wall-clock for the run in \Cref{tab:main} (7 tasks, batched \texttt{lm-eval-harness} evaluation).}
+\label{tab:vram}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Config} & \textbf{Trainable} & \textbf{VRAM peak} & \textbf{Wall-clock} \\
+\midrule
+Base           & 0            & 2{,}377\,MB & 2.27\,h \\
+LoRA $r{=}8$   & 20.2M        & 3{,}322\,MB & 2.30\,h \\
+\sthree{}      & 3.90M        & 3{,}404\,MB & 2.84\,h \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\textbf{[EXP: Convergence curves.]} Training loss vs.\ step for S\textsuperscript{3} vs.\ QLoRA to empirically test Theorem~\ref{thm:stb-conv}'s prediction of accelerated convergence via STB spectral preconditioning.
+All three configurations fit on a 4\,GB card; none fit the $\sim$345\,MB figure from the single-layer analytical decomposition (\Cref{sec:vram-gap} explains why the two numbers measure different things). Training-only runs (no batched evaluation, single-example forward/backward) peak lower: 1{,}585--2{,}269\,MB depending on which operators are active (\Cref{tab:pathways}). \sthree{}'s wall-clock is the longest of the three (NMF's RK4 integration is the dominant added cost), consistent with it being compute-bound rather than VRAM-bound on this hardware.
+
+\subsection{Ablation by Coupled Pathways}
+\label{sec:pathways}
+
+A per-operator ablation (remove SVMO alone, remove STB alone, \ldots) is the standard PEFT ablation design, but it is invalid for \sthree{} by construction: STB is built \emph{from} SVMO's SVD factors ($U_k$, \Cref{sec:svmo}), so ``SVMO only'' does not isolate SVMO --- it removes the operator that consumes SVMO's output, leaving a structurally broken spectral pathway. ``STB only'' cannot exist at all. We instead ablate by \textbf{pathway}: the \textit{spectral} pathway (SVMO+STB, coupled by construction) versus the \textit{flow} pathway (NMF, independent), measured on perplexity change ($\Delta$ppl, lower is better) over a held-out Alpaca slice never seen in training, base ppl $\approx 11.96$.
+
+\begin{table}[t]
+\centering
+\caption{Ablation by pathway (Qwen2.5-7B, Alpaca, single seed). Params sum exactly across the three matched-budget compositions, enabling controlled comparison.}
+\label{tab:pathways}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+\textbf{Variant (pathway)} & \textbf{Params} & \textbf{$\Delta$ppl} \\
+\midrule
+SVMO only (\textit{spectral, broken}) & 225,988 & $-0.32$ \\
+NMF, $d_b{=}1$ (flow) & 401,464 & $-5.13$ \\
+NMF, $d_b{=}2$ (flow) & 802,928 & $-5.42$ \\
+NMF only, $d_b{=}8$ (flow) & 3,211,712 & $-6.40$ \\
+SVMO+STB (spectral) & 684,740 & $-5.73$ \\
+SVMO+STB + NMF $d_b{=}1$ (both) & 1,086,204 & $-6.28$ \\
+SVMO only + NMF $d_b{=}8$ (\textit{spectral broken} + flow) & 3,437,700 & $-6.42$ \\
+Full \sthree{} (both) & 3,896,452 & $-6.65$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Finding 1 --- SVMO alone does nothing; SVMO+STB does.} Adding SVMO to the flow pathway without STB (row 7 vs.\ row 4: $+225$K params) moves $\Delta$ppl by only $+0.02$; adding SVMO \emph{with} STB (row 8 vs.\ row 4: $+685$K params) moves it by $+0.25$. This is consistent with the theory (\Cref{sec:svmo}): $\Delta\sigma = S_k \cdot \alpha \cdot \tanh(g)$ only rescales existing singular directions by $\pm\alpha$; it cannot create new ones. SVMO's contribution is not its own $\Delta\sigma$ --- it is fabricating the basis $U_k$ that STB then operates on.
+
+\textbf{Finding 2 --- at matched low budget, spectral beats flow.} SVMO+STB (685K params, row 5) beats NMF $d_b{=}2$ (803K params, row 3) with 15\% \emph{fewer} parameters. This advantage is budget-dependent, not universal: at $\sim$3.2--3.9M params (rows 4 vs.\ 8) spectral and flow contributions roughly converge ($0.36$ vs.\ $0.41$ ppl/M marginal), consistent with spectral modulation having a low structural ceiling ($\pm\alpha$ rescaling only) that flow's larger bottleneck eventually matches.
+
+\textbf{Finding 3 --- combining beats either alone at equal total budget.} Row 6 (1.086M params, both pathways) beats extrapolating either pathway alone to the same budget: spectral params invested on top of a small flow pathway return $1.68$ ppl/M vs.\ $0.73$ ppl/M for investing the same budget in more flow (interpolated between rows 3 and 4; no exact-budget flow-only point exists at 1.086M in this table --- see caveat below).
+
+\textbf{Caveat on two additional points.} Two further variants closing gaps in this table (flow-only at $\sim$1.2M params to avoid interpolating; a second spectral point at 1.31M params) were measured in a separate session and showed a different held-out base perplexity ($9.52$ vs.\ $11.96$ above) that we did not fully reconcile before this draft --- the base model, code path, library versions, and dataset were all verified identical between the two sessions, so the cause is unresolved rather than explained. We omit those two points from \Cref{tab:pathways} pending a same-session re-measurement (in progress; \Cref{sec:stats}) rather than mix numbers we cannot yet vouch for into the table above.
+
+\subsection{Is NMF a Real Flow, or a Fixed-Step Shortcut?}
+\label{sec:ode-invariance}
+
+Theorem~\ref{thm:nmf-traj} claims NMF learns a continuous trajectory, but training always used $N{=}4$ RK4 steps --- a claim of continuity is falsifiable: if NMF only fits the specific discretization it was trained under, perplexity should shift noticeably when $N$ changes at evaluation time. We took the trained \texttt{full} checkpoint (\Cref{tab:pathways}, unmodified) and re-evaluated held-out perplexity with $N \in \{1,2,4,8,16\}$, changing only \texttt{N\_steps}/\texttt{dt} at inference, no retraining.
+
+\begin{table}[t]
+\centering
+\caption{Held-out perplexity vs.\ RK4 step count, same trained checkpoint.}
+\label{tab:ode-invariance}
+\footnotesize
+\begin{tabular}{@{}cccccc@{}}
+\toprule
+$N$ & 1 & 2 & 4 (train) & 8 & 16 \\
+\midrule
+ppl & 4.4596 & 4.4598 & 4.4598 & 4.4598 & 4.4597 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The spread across $N=1$ to $N=16$ is $0.0002$ ppl, $0.004\%$ of the mean. This is evidence \emph{for} the continuous-flow interpretation --- a model exploiting the specific $N{=}4$ discretization would be expected to degrade at other step counts, and it does not --- though we note $N{=}1$ already performing this well is itself informative: it suggests the learned velocity field is close to piecewise-constant over $[0,T]$ for this task, i.e.\ the trajectories NMF learns here may be simpler than the full curved-path capacity Theorem~\ref{thm:nmf-traj} allows for.
+
+\subsection{Statistical Significance}
+\label{sec:stats}
+
+Every number in \Cref{tab:main,tab:pathways} above is a single seed. \textit{As of this draft, a $n{=}3$-seed re-run (seeds 42, 43, 44) of all three ablation suites is in progress on the same hardware}, launched to give a mean$\pm$std for the headline comparisons above rather than single-run point estimates, and in particular to resolve whether the \sthree{} vs.\ LoRA $r{=}8$ margins in \Cref{tab:main} (and the two-point discrepancy noted in \Cref{sec:pathways}) hold up or are single-run noise. \textit{[This subsection is the one part of \Cref{sec:experiments} not yet backed by a finished run; it will be replaced with the mean$\pm$std table before this draft is considered submission-ready. Do not cite significance claims from this draft until this paragraph is gone.]}
 
 %==============================================================================
 \section{Discussion}
+\label{sec:discussion}
 %==============================================================================
 
 \subsection{Why \sthree{} Works: Three Design Principles}
 
-\textbf{1. Spectral efficiency (\svmo).} Modulating a weight matrix through its singular value spectrum is parametrically compact: a 2-hidden-layer MLP with $\sim$1{,}088 parameters can reshape an entire $4096 \times 4096$ matrix by adjusting how much each of the 128 principal directions contributes. The log-domain operation compresses the large dynamic range of singular values, and $\tanh$ saturation guarantees numerical stability (Theorem~\ref{thm:svmo-grad}).
+\textbf{1. Spectral efficiency (\svmo).} Modulating a weight matrix through its singular value spectrum is parametrically compact: a 2-hidden-layer MLP with $\sim$1{,}088 parameters can reshape an entire $4096 \times 4096$ matrix by adjusting how much each of the 128 principal directions contributes. The log-domain operation compresses the large dynamic range of singular values, and $\tanh$ saturation guarantees numerical stability (Theorem~\ref{thm:svmo-grad}). \textbf{But note \Cref{sec:pathways}, Finding~1:} on its own, this mechanism moves perplexity by only $+0.02$ at matched budget --- SVMO's measured value is almost entirely in fabricating the basis STB consumes, not in its own rescaling.
 
-\textbf{2. Continuous deformation (\nmf).} Discrete MLP adapters apply static translations $h \to h + \text{offset}$. NMF applies a continuous ODE flow, enabling curved trajectories, time-dependent velocity fields, and multi-scale processing. The corrected Gr\"onwall analysis (Theorem~\ref{thm:nmf-traj}) proves error grows \textit{linearly} in $T$, validating our use of $T \in \{0.5, 1.0, 2.0\}$. The bottleneck structure ensures expressivity at only $\sim$65K parameters per flow.
+\textbf{2. Continuous deformation (\nmf).} Discrete MLP adapters apply static translations $h \to h + \text{offset}$. NMF applies a continuous ODE flow, enabling curved trajectories, time-dependent velocity fields, and multi-scale processing. The corrected Gr\"onwall analysis (Theorem~\ref{thm:nmf-traj}) proves error grows \textit{linearly} in $T$, validating our use of $T \in \{0.5, 1.0, 2.0\}$. The solver-invariance result (\Cref{sec:ode-invariance}) is the empirical counterpart: perplexity is stable to $0.004\%$ across a $16\times$ range of integration steps, which is what a genuine continuous flow should look like.
 
-\textbf{3. Coordinated adaptation (\stb).} Theorem~\ref{thm:stb-mi} proves mutual information is identically zero without the bridge. The cross-attention coupling in the spectral basis creates a channel of dimension $k=128$ through which weight-space and representation-space adaptations coordinate, discovering complementary strategies (Theorem~\ref{thm:stb-conv} formalizes the convergence benefit).
+\textbf{3. Coordinated adaptation (\stb).} Theorem~\ref{thm:stb-mi} proves mutual information is identically zero without the bridge. The cross-attention coupling in the spectral basis creates a channel of dimension $k=128$ through which weight-space and representation-space adaptations coordinate. As noted after Theorems~5--6, the information-theoretic bound this rests on is directionally correct but numerically small; the stronger evidence that the coupling matters is empirical (\Cref{sec:pathways}, Finding~1).
 
 \subsection{Limitations}
 
 \begin{itemize}[leftmargin=*]
-    \item \textbf{Training throughput on consumer hardware.} CPU$\leftrightarrow$GPU weight swapping dominates wall-clock time (PCIe bandwidth). While S\textsuperscript{3} democratizes \textit{access} (2\,GB vs.\ $>$8\,GB), it does not match the training speed of methods holding the full model in GPU memory. On a GPU with sufficient VRAM (e.g., RTX 4090, 24\,GB), training time drops to $\sim$1--2 hours.
-    \item \textbf{SVD pre-computation cost.} One-time randomized SVD requires loading the full model into CPU RAM ($\sim$14\,GB fp16), completing in $\sim$2 minutes. Memory-mapped loading mitigates RAM constraints.
-    \item \textbf{Benchmark breadth.} Our evaluation covers standard NLP benchmarks but lacks generative quality assessments (MT-Bench, human evaluations). Future work should incorporate LLM-as-judge evaluation.
-    \item \textbf{Single-task focus.} S\textsuperscript{3} is designed for single-dataset instruction tuning. Multi-task, continual, or multi-domain adaptation scenarios require further investigation.
+    \item \textbf{Statistical power.} At the time of writing, \Cref{tab:main,tab:pathways} are single-seed measurements; \Cref{sec:stats} reports a 3-seed re-run in progress to quantify run-to-run variance. Treat point estimates in this draft as such until that lands.
+    \item \textbf{Single base model, narrow task set.} All results are on Qwen2.5-7B-Instruct with seven zero-shot lm-eval-harness tasks. We did not test Mistral, Llama-3, MMLU, GSM8K, or generative/instruction-following evaluation (AlpacaEval, MT-Bench, human eval) --- an earlier draft of this paper implied these were underway when they had not been run; that claim is retracted here, not softened.
+    \item \textbf{Training throughput.} Disk-streamed layer-major execution is compute/IO-bound on this hardware; a full-scale (tens of thousands of examples) training run is impractical on a single GTX 1050 at the throughput we measure ($\sim$5 tok/s), on the order of days to weeks depending on dataset size. \sthree{} lowers the VRAM floor, not the time floor. On a GPU with more VRAM the same code can hold more of the model resident and would train faster, but we have not measured that configuration.
+    \item \textbf{The \S\ref{sec:motivation} audience is narrower than ``anyone without a big GPU.''} A user with stable cloud access (e.g., a free-tier 16\,GB Colab GPU) has no reason to prefer \sthree{} over standard LoRA; we name the actual audience explicitly in \Cref{sec:motivation} rather than lean on a broader hardware-scarcity framing that a reviewer could reasonably challenge.
+    \item \textbf{Ablation configuration mismatch.} The ablation suite (\Cref{sec:pathways}) does not enable the S3-OPT extras (TER, DRA, MSO, TOWS, HFISC, FDGD, GNS, EMP, SMV) that the headline training configuration does; \Cref{tab:pathways} therefore is not run under bit-identical settings to \Cref{tab:main}. Most of these extras are logged-but-inert with respect to gradients (\S\ref{sec:svmo}--\S\ref{sec:stb} theorems bound quality, not throughput), so we believe this does not change the pathway conclusions, but we have not run the matched-configuration check to confirm it.
+    \item \textbf{Theoretical bounds vary in strength.} We flag this explicitly rather than let table-of-contents length substitute for it: SVMO's approximation rate (Thm.~1), gradient stability (Thm.~2), and SGC's exact-gradient result (Thm.~8) are load-bearing and used as stated. STB's mutual-information/convergence bounds (Thm.~5--6) and the PAC-Bayes bound (Thm.~7) are real but numerically loose (see the honesty remarks after each); we would rather a reader discount them appropriately than discover the gap themselves.
 \end{itemize}
 
-\subsection{Broader Impact}
+\subsection{Who This Is For}
 
-By lowering the hardware requirement for LLM fine-tuning from $>$8\,GB VRAM to 2\,GB, S\textsuperscript{3}: enables independent researchers, students, and laboratories in developing countries to adapt open-weight LLMs; reduces energy consumption ($\sim$4--8$\times$ savings: 75\,W consumer GPU vs.\ 300--400\,W data-center GPU); and aligns with the ``Green AI'' movement~\cite{schwartz2020green} by demonstrating that algorithmic innovation can substitute for hardware scale.
+We deliberately replace a ``broader impact'' framing pitched at ``developing countries'' and researchers in general with the narrower, falsifiable audience from \Cref{sec:motivation}: users without stable/sufficient connectivity for multi-hour cloud sessions, settings where training data cannot leave the device, users in regions without practical access to the relevant cloud services, workloads needing long unattended runs beyond free-tier session limits, and sustained/repeated use where an owned GPU's zero marginal cost beats a recurring subscription. Energy: a 75\,W consumer GPU vs.\ a 300--400\,W data-center accelerator is a real efficiency difference for workloads in this regime, though it is not the primary motivation --- for a user who could use a free cloud GPU instead, the energy argument does not by itself justify \sthree{} over that alternative.
 
 %==============================================================================
 \section{Conclusion}
 %==============================================================================
 
-We introduced S\textsuperscript{3} (Spectral-Spatial-Smooth), a novel PEFT paradigm enabling 7B-scale LLM instruction tuning on consumer GPUs with only 2\,GB VRAM. S\textsuperscript{3} combines three mathematically novel operators: SVMO (pointwise nonlinear singular value modulation with frozen singular vectors), NMF (the first Neural ODE application to LLM PEFT, with corrected Gr\"onwall analysis), and STB (spectral cross-attention coupling creating bidirectional weight-representation coordination). Together they total 4.83M trainable parameters ($0.060\%$ of a 7B model) with peak VRAM of $\sim$345\,MB.
+We introduced S\textsuperscript{3} (Spectral-Spatial-Smooth), a PEFT paradigm enabling 7B-scale LLM instruction tuning on consumer GPUs with as little as 4\,GB VRAM. S\textsuperscript{3} combines three coupled operators: SVMO (pointwise nonlinear singular value modulation with frozen singular vectors), NMF (a Neural ODE flow over latent representations, with corrected Gr\"onwall analysis), and STB (spectral cross-attention coupling creating bidirectional weight-representation coordination). On Qwen2.5-7B-Instruct, the model we actually trained and evaluated, this totals 3.90M trainable parameters ($0.0511\%$) with end-to-end measured peak VRAM of 1.6--3.4\,GB depending on workload.
 
-We established ten formal results: an explicit $O(1/\sqrt{H})$ approximation rate for SVMO (Theorem~\ref{thm:svmo-approx}); uniform gradient stability via $\tanh$ saturation (Theorem~\ref{thm:svmo-grad}); corrected Gr\"onwall trajectory bounds proving linear-in-$T$ error growth (Theorem~\ref{thm:nmf-traj}); RK4 integration guarantees with $\varepsilon_{\text{ODE}} \leq 6.3\times 10^{-6}$ (Theorem~\ref{thm:nmf-rk4}); a mutual information lower bound proving that STB creates non-zero coupling (Theorem~\ref{thm:stb-mi}); local convergence acceleration through spectral preconditioning (Theorem~\ref{thm:stb-conv}); the first non-vacuous PAC-Bayes generalization bound for 7B-scale PEFT, with effective dimension $d_{\text{eff}} \approx 1{,}760$ and $\KL \leq 7{,}320$ (Theorem~\ref{thm:pacbayes}); exact gradient preservation under spectral compression (Theorem~\ref{thm:sgc}); linear-in-epoch error accumulation for progressive ODE integration (Theorem~\ref{thm:nfr}); and provably non-zero mutual information under stochastic STB bypass (Theorem~\ref{thm:sbs}).
+We established ten formal results, of uneven weight by our own assessment (\Cref{sec:discussion}): an explicit $O(1/\sqrt{H})$ approximation rate for SVMO (Theorem~\ref{thm:svmo-approx}), uniform gradient stability via $\tanh$ saturation (Theorem~\ref{thm:svmo-grad}), corrected Gr\"onwall trajectory bounds proving linear-in-$T$ error growth (Theorem~\ref{thm:nmf-traj}), RK4 integration guarantees (Theorem~\ref{thm:nmf-rk4}), and exact gradient preservation under spectral compression (Theorem~\ref{thm:sgc}) are load-bearing and match what we observe empirically. The STB mutual-information and convergence bounds (Theorems~\ref{thm:stb-mi}--\ref{thm:stb-conv}) and the PAC-Bayes generalization bound (Theorem~\ref{thm:pacbayes}) are real results but numerically loose --- we report them as directionally informative, not as tight guarantees, and say so explicitly at each occurrence rather than only in this summary.
 
-[EXP: Empirical validation on Qwen2.5-7B, Mistral-7B-v0.3, and Llama-3-8B across five benchmarks, with comparisons against LoRA, QLoRA, and full fine-tuning baselines, full VRAM traces, and ablation studies is currently in progress. All [EXP:\ldots] placeholders will be replaced with real data upon completion. Code, pre-computed SVD factors, and experimental configurations will be released upon publication.]
+Empirically (\Cref{sec:experiments}), on seven zero-shot lm-eval-harness tasks, \sthree{} matches LoRA rank-8 within a few points per task while training $5.2\times$ fewer parameters; an ablation over coupled operator pathways shows the spectral pathway (SVMO+STB) matching the flow pathway (NMF) with 15\% fewer parameters at low budget, and combining both beating either alone at matched total budget; and a solver-invariance sweep supports that NMF learns a genuine continuous flow rather than a step-count-specific shortcut. A 3-seed significance re-run was in progress at the time of writing (\Cref{sec:stats}) and should be consulted before treating any single-run margin above as settled. \sthree{}'s intended audience --- users for whom on-demand cloud GPUs are not actually a substitute, not ``anyone without a big GPU'' --- is stated explicitly in \Cref{sec:motivation}. Code, pre-computed SVD factors, and experimental configurations will be released alongside publication.
 
 %==============================================================================
 \bibliographystyle{IEEEtran}
@@ -1026,27 +1069,6 @@ R.~Schwartz, J.~Dodge, N.~A.~Smith, and O.~Etzioni.
 R.~Taori et al.
 \textit{Alpaca: A Strong, Replicable Instruction-Following Model.}
 Stanford CRFM, 2023.
-
-\bibitem{talan2026}
-[EXP: Full citation for TALAN, 2026.]
-
-\bibitem{liu2026decodable}
-[EXP: Full citation for Liu, 2026.]
-
-\bibitem{qin2026spectral}
-[EXP: Qin \& Sun, spectral adapter, 2026.]
-
-\bibitem{li2026unified}
-[EXP: Li, Mak, Pilanci et al., unified spectral PEFT, 2026.]
-
-\bibitem{moayededi2026disco}
-[EXP: Moayededi et al., DiSCo, SPIE 2026.]
-
-\bibitem{hico2026}
-[EXP: HiCoLoRA, ACL Findings 2026.]
-
-\bibitem{abdullaev2026ot}
-[EXP: Abdullaev et al., OT for representation steering, 2026.]
 
 \end{thebibliography}
 

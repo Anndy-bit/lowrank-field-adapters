@@ -1,0 +1,33 @@
+{
+  "1": {
+    "eval_loss": 1.49506,
+    "perplexity": 4.4596,
+    "n_batches": 25
+  },
+  "2": {
+    "eval_loss": 1.49509,
+    "perplexity": 4.4598,
+    "n_batches": 25
+  },
+  "4": {
+    "eval_loss": 1.4951,
+    "perplexity": 4.4598,
+    "n_batches": 25
+  },
+  "8": {
+    "eval_loss": 1.49511,
+    "perplexity": 4.4598,
+    "n_batches": 25
+  },
+  "16": {
+    "eval_loss": 1.49509,
+    "perplexity": 4.4597,
+    "n_batches": 25
+  },
+  "_summary": {
+    "ppl_min": 4.4596,
+    "ppl_max": 4.4598,
+    "ppl_spread": 0.0002,
+    "ppl_spread_pct_of_mean": 0.004
+  }
+}

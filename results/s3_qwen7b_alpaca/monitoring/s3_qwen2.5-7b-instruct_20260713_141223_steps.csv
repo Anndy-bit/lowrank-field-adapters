@@ -1,0 +1,1 @@
+timestamp,wall_time_s,step,epoch,batch_idx,micro_step,loss,vram_mb,vram_peak_mb,step_time_ms,tokens_per_sec,lr,nfr_steps,sbs_active_pct,gpu_util_pct,gpu_temp_c,gpu_power_w,gpu_clock_mhz,mem_clock_mhz,cpu_usage_pct,cpu_temp_c,cpu_power_w,ram_gb,layer_fwd_ms,layer_bwd_ms

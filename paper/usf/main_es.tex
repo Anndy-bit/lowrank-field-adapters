@@ -1,5 +1,5 @@
 %==============================================================================
-% USF — Ajuste Fino por Streaming de Unidades. Artículo 1 (el sistema de streaming).
+% USF — Unit-Streamed Fine-Tuning. Artículo 1 (el sistema de streaming).
 % Formato IEEE (revista). Versión en español de main.tex.
 % REGLA: todo número de este artículo está medido. Sin marcadores de posición.
 %==============================================================================
@@ -64,48 +64,64 @@
 
 \begin{document}
 
-\title{\usf{}: Ajuste Fino por Streaming de Unidades con Gradientes\\ Exactos en GPUs de Consumo}
+% El título se mantiene en inglés a propósito: el acrónimo USF deriva de «Unit-Streamed
+% Fine-Tuning», y traducirlo lo dejaría huérfano («Ajuste Fino por Streaming de Unidades» daría
+% AFSU). El nombre del método es un nombre propio y no se traduce, igual que LoRA o QLoRA.
+% Sin \\ manual: IEEEtran centra y equilibra el título mejor que un salto forzado.
+\title{\usf{}: Unit-Streamed Fine-Tuning of Large Language Models with Exact Gradients on
+Consumer GPUs}
 
-% Bloque de autor: se deja SIN autor a propósito. Descomentar y rellenar antes del envío final.
-% \author{Nombre Apellido%
-% \thanks{Afiliación, ciudad, país. Correo: usuario@dominio.}%
-% \thanks{Manuscrito preparado en julio de 2026. Todos los experimentos se realizaron en un único
-% equipo de escritorio con una NVIDIA GTX~1050 (3,94\,GB).}}
-\author{\thanks{Manuscrito preparado en julio de 2026. Todos los experimentos se realizaron en un único
-equipo de escritorio con una NVIDIA GTX~1050 (3,94\,GB).}}
+\author{
+Nicolas Andrey Orozco Giraldo, Luis Eduardo Muñoz Guerrero\\
+\textit{Universidad Tecnológica de Pereira}\\
+Pereira, Colombia\\
+nicolas.orozco@utp.edu.co, lemunozg@utp.edu.co\\
+ORCID: \href{https://orcid.org/0000-0002-6332-9757}{0000-0002-6332-9757},
+\href{https://orcid.org/0000-0002-9414-6187}{0000-0002-9414-6187}\\[6pt]
+Yony Fernando Ceballos\\
+\textit{Facultad de Ingeniería, Grupo de Ingeniería y Sociedad}\\
+\textit{Universidad de Antioquia}\\
+Medellín, Colombia\\
+yony.ceballos@udea.edu.co\\
+ORCID: \href{https://orcid.org/0000-0001-5787-8832}{0000-0001-5787-8832}
+\thanks{Manuscrito preparado en julio de 2026. Todos los experimentos se realizaron en un único
+equipo portátil con una NVIDIA GeForce GTX~1050 (Mobile, 3,94\,GB, sin tensor cores).}}
 
 \maketitle
 
 %==============================================================================
 \begin{abstract}
-El ajuste fino de un modelo de lenguaje de 7\,B parámetros requiere convencionalmente entre 8 y
-16\,GB de memoria de GPU, dado que la base congelada debe permanecer residente durante los pases
-hacia adelante y hacia atrás. Demostramos que este requisito es un artefacto de la implementación
+El \emph{fine-tuning} de un modelo de lenguaje de 7\,B parámetros requiere convencionalmente entre
+8 y 16\,GB de memoria de GPU, dado que la base congelada debe permanecer residente durante los
+pases hacia adelante y hacia atrás. Ese requisito es precisamente lo que excluye a quien no tiene
+hardware de nivel centro de datos de ajustar modelos de esta escala en absoluto, sin importar cuán
+pocos parámetros pretenda entrenar. Demostramos que el requisito es un artefacto de la implementación
 y no una necesidad matemática. La diferenciación en modo inverso compone productos
 vector--jacobiano \emph{locales}: el gradiente en la capa $i$ depende únicamente de la entrada de
 esa capa, de sus pesos y del cotangente entrante, nunca de las restantes $L-1$ capas. Presentamos
-el \emph{Ajuste Fino por Streaming de Unidades} (\usf), que mantiene exactamente una unidad de
-pesos residente a la vez, transmitida desde disco, y demostramos que los gradientes resultantes son
-\emph{exactos} (\Cref{thm:exact}) y no aproximados. La consecuencia es una cota de memoria
+\emph{Unit-Streamed Fine-Tuning} (\usf; ajuste fino por streaming de unidades), que mantiene
+exactamente una unidad de pesos residente a la vez, transmitida desde disco, y demostramos que los
+gradientes resultantes son \emph{exactos} (\Cref{thm:exact}) y no aproximados. La consecuencia es una cota de memoria
 independiente de la profundidad del modelo y de su número total de parámetros: solo importa la
 unidad individual más grande (\Cref{thm:vram}). Demostramos además que invertir el orden de los
 bucles (\emph{layer-major}, \Cref{thm:lm}) divide el tráfico de disco por el factor de acumulación
 de gradiente $G$ dejando los gradientes idénticos bit a bit, lo que traslada el régimen de estar
-limitado por E/S a estarlo por cómputo. En una GTX~1050 (3,94\,GB) ajustamos Qwen2.5-7B ---15,2\,GB
+limitado por E/S a estarlo por cómputo. En una GTX~1050 móvil (3,94\,GB, sin tensor cores) ---una
+elección deliberadamente desfavorable, dado que una cota que se cumple aquí se cumple en
+prácticamente cualquier GPU que un practicante pueda poseer--- ajustamos Qwen2.5-7B ---15,2\,GB
 de pesos en disco--- con un pico de 2,2\,GB en el asignador, o 2,9\,GB de ocupación total del
 dispositivo incluyendo el contexto CUDA, reduciendo la perplejidad en datos reservados de 9,52 a
 4,46; la exactitud del esquema layer-major se verifica sobre el propio modelo de 7\,B
 ($\max|\Delta|=0$ en 1400 tensores) y produce una aceleración medida de $1{,}40\times$. Un modelo de coste predictivo concuerda con las
 mediciones dentro de un 6\,\%. \usf{} es agnóstico al adaptador: un adaptador espectral y LoRA se
 ejecutan sin modificación alguna. Bajo el mismo presupuesto, la cuantización a 4 bits no cabe
-(requiere 5,43\,GB), lo que convierte esto en una separación de viabilidad y no en una preferencia.
-La cota predice que Llama-3-70B cabe en la misma tarjeta con la granularidad implementada;
-precisamos con exactitud qué establece y qué no establece dicha afirmación.
+(requiere 5,43\,GB). La cota predice que Llama-3-70B cabe en la misma tarjeta con la granularidad
+implementada.
 \end{abstract}
 
 \begin{IEEEkeywords}
-Ajuste fino eficiente en parámetros, entrenamiento con memoria limitada, modelos de lenguaje de
-gran tamaño, gradientes exactos, cómputo fuera de núcleo, diferenciación automática, hardware de
+\emph{Parameter-efficient fine-tuning}, entrenamiento con memoria limitada, modelos de lenguaje de
+gran tamaño, gradientes exactos, cómputo \emph{out-of-core}, diferenciación automática, hardware de
 consumo.
 \end{IEEEkeywords}
 
@@ -113,10 +129,11 @@ consumo.
 \section{Introducción}
 \label{sec:intro}
 
-\IEEEPARstart{E}{l} ajuste fino eficiente en parámetros (PEFT) redujo en órdenes de magnitud la
-huella \emph{entrenable} de la adaptación de modelos de lenguaje: LoRA~\cite{hu2022lora} actualiza
-muy por debajo del 1\,\% de los pesos, y los adaptadores~\cite{houlsby2019adapters} o el ajuste de
-prompts~\cite{lester2021prompt} actualizan aún menos. La huella \emph{residente}, sin embargo, no
+\IEEEPARstart{E}{l} \emph{parameter-efficient fine-tuning} (PEFT; ajuste fino eficiente en
+parámetros) redujo en órdenes de magnitud la huella \emph{entrenable} de la adaptación de modelos
+de lenguaje: LoRA~\cite{hu2022lora} actualiza muy por debajo del 1\,\% de los pesos, y los
+adaptadores~\cite{houlsby2019adapters} o el \emph{prompt tuning}~\cite{lester2021prompt}
+actualizan aún menos. La huella \emph{residente}, sin embargo, no
 siguió el mismo camino. Sea cual sea el adaptador, la base congelada debe estar presente durante
 los pases hacia adelante y hacia atrás, de modo que adaptar un modelo de 7\,B en precisión media
 sigue exigiendo entre 8 y 16\,GB de memoria de dispositivo. El efecto práctico es un censo de
@@ -126,7 +143,7 @@ independencia de cuán pocos parámetros pretenda entrenar.
 La cuantización ataca la constante~\cite{dettmers2023qlora,dettmers2022int8}, comprimiendo la base
 residente en un factor de cuatro a ocho. No ataca el acoplamiento. Un modelo de 7\,B en 4 bits
 sigue ocupando varios gigabytes, uno de 70\,B en 4 bits sigue excediendo cualquier tarjeta de
-consumo, y la compresión se paga en precisión. Los marcos de descarga como
+consumo, y la compresión se paga en precisión. Los marcos de \emph{offloading} como
 ZeRO-Infinity~\cite{rajbhandari2021zeroinfinity} sí trasladan los parámetros fuera del
 dispositivo, pero fueron diseñados para un régimen distinto ---entrenar \emph{todos} los pesos en
 un clúster--- donde el problema dominante es el particionado del estado del optimizador.
@@ -136,7 +153,8 @@ un clúster--- donde el problema dominante es el particionado del estado del opt
 Este artículo parte de una propiedad elemental de la diferenciación en modo
 inverso~\cite{griewank2008evaluating,baydin2018autodiff} que, hasta donde sabemos, no se ha
 explotado hasta sus últimas consecuencias en este contexto. La retropropagación es una composición
-de productos vector--jacobiano (VJP) \emph{locales}. Para derivar a través de la capa $i$ se
+de productos vector--jacobiano (VJP, del inglés \emph{vector--Jacobian product}) \emph{locales}.
+Para derivar a través de la capa $i$ se
 requieren la entrada de esa capa, sus pesos y el cotangente entrante, y nada más. Las restantes
 $L-1$ capas son irrelevantes \emph{en ese instante}. Mantener el modelo completo residente es, por
 tanto, una decisión tomada por velocidad, no un requisito impuesto por la corrección.
@@ -151,7 +169,7 @@ aproximación.
 \subsection{La consecuencia}
 
 Una vez desacoplada la residencia de la corrección, la cota de memoria cambia de forma. El pico lo
-fija la unidad individual más grande, no el modelo:
+fija la unidad individual más grande:
 \begin{equation}
 \label{eq:headline}
 \mathrm{VRAM}_{\text{pico}} \;\approx\; \max_u \Wu \cdot s \;+\; |\theta|\cdot s_{\text{opt}} \;+\; A ,
@@ -191,7 +209,7 @@ y un adaptador espectral sin modificación (\Cref{cor:agnostic}), y selecciona a
 granularidad de streaming a partir de la memoria disponible (\Cref{sec:auto}).
 \end{enumerate}
 
-Somos explícitos sobre el alcance. \emph{Demostramos} 7\,B en una tarjeta de 4\,GB;
+\emph{Demostramos} 7\,B en una tarjeta de 4\,GB;
 \emph{predecimos}, a partir de una cota demostrada y un modelo de coste validado, que 70\,B cabe en
 la misma tarjeta con la maquinaria que implementamos; e identificamos con precisión qué extensión
 no implementada requeriría un modelo de 405\,B (\Cref{sec:scaling}). No presentamos estas dos
@@ -201,9 +219,9 @@ no implementada requeriría un modelo de 405\,B (\Cref{sec:scaling}). No present
 \section{Trabajo Relacionado}
 \label{sec:related}
 
-\textbf{Ajuste fino eficiente en parámetros.} LoRA~\cite{hu2022lora} y sus
-descendientes~\cite{liu2024dora}, los adaptadores~\cite{houlsby2019adapters} y el ajuste de
-prompts~\cite{lester2021prompt} minimizan los parámetros \emph{entrenables}. Son ortogonales a este
+\textbf{Parameter-efficient fine-tuning.} LoRA~\cite{hu2022lora} y sus
+descendientes~\cite{liu2024dora}, los adaptadores~\cite{houlsby2019adapters} y el \emph{prompt
+tuning}~\cite{lester2021prompt} minimizan los parámetros \emph{entrenables}. Son ortogonales a este
 trabajo: \usf{} gobierna dónde reside el cómputo, no qué se adapta, y el \Cref{cor:agnostic} lo
 formaliza. Evaluamos LoRA y un adaptador espectral bajo \usf{} sin modificar ninguno de los dos.
 
@@ -215,7 +233,7 @@ tamaño del modelo; la \Cref{sec:quant} recoge la consecuencia concreta: en nues
 bits resulta inviable y \usf{} no. Ambas técnicas son componibles y no las presentamos como
 alternativas.
 
-\textbf{Descarga y particionado.} ZeRO~\cite{rajbhandari2020zero},
+\textbf{Offloading y particionado.} ZeRO~\cite{rajbhandari2020zero},
 ZeRO-Offload~\cite{ren2021zerooffload} y ZeRO-Infinity~\cite{rajbhandari2021zeroinfinity}
 establecieron que los parámetros y el estado del optimizador pueden residir fuera del dispositivo,
 y son el precedente más cercano. El régimen difiere en el punto que importa. Esos sistemas se
@@ -223,8 +241,8 @@ orientan a entrenamientos en los que todos los pesos son entrenables, distribuid
 su dificultad central, y su aportación principal, es particionar el estado del optimizador, cuyo
 tamaño es proporcional al número de parámetros entrenables. En nuestro régimen
 $|\theta| \ll |W|$, de modo que no hay estado del optimizador que merezca particionarse, y el
-problema se reduce por completo a la residencia de $W$. Lo que aportamos no es, por tanto, la
-descarga en sí, sino (i) la cota formal y su independencia del tamaño del modelo
+problema se reduce por completo a la residencia de $W$. Lo que aportamos no es, por tanto, el
+\emph{offloading} en sí, sino (i) la cota formal y su independencia del tamaño del modelo
 (\Cref{thm:vram}), (ii) la jerarquía de granularidad que determina la viabilidad
 (\Cref{thm:gran}), y (iii) el reordenamiento layer-major (\Cref{thm:lm}), que carece de propósito
 en un régimen donde el modelo es residente. Las bibliotecas de despacho de producción como
@@ -247,12 +265,13 @@ tráfico entre disco y dispositivo para los pesos del modelo completo. El \Cref{
 resultado de planificación consciente de la E/S en ese mismo espíritu, y la \Cref{sec:cost} sigue
 el razonamiento roofline de~\cite{williams2009roofline} para identificar qué recurso limita.
 
-\textbf{Segmentación en cauce.} GPipe~\cite{huang2019gpipe} y enfoques
+\textbf{Pipelining.} GPipe~\cite{huang2019gpipe} y enfoques
 relacionados~\cite{jia2019beyond} reparten capas entre dispositivos y solapan micro-lotes para
-llenar el cauce. Superficialmente, layer-major (\Cref{thm:lm}) recuerda a una planificación de
-cauce; el propósito está invertido. La segmentación en cauce distribuye un modelo demasiado grande
-para un dispositivo entre varios; layer-major conserva un único dispositivo y amortiza el coste de
-\emph{releer} el modelo, un gasto que solo existe cuando los pesos se transmiten.
+llenar el \emph{pipeline}. Superficialmente, layer-major (\Cref{thm:lm}) recuerda a una
+planificación de \emph{pipeline}; el propósito está invertido. El \emph{pipelining} distribuye un
+modelo demasiado grande para un dispositivo entre varios; layer-major conserva un único dispositivo
+y amortiza el coste de \emph{releer} el modelo, un gasto que solo existe cuando los pesos se
+transmiten.
 
 %==============================================================================
 \section{Preliminares}
@@ -346,8 +365,8 @@ $g_L = \partial\ell/\partial h_L$.
 
 Por consiguiente, cada VJP local se evalúa exactamente en el punto en que se evaluaría en el grafo
 completo, y su composición ---que es precisamente la regla de la cadena--- produce el mismo valor.
-Finalmente, $\textsc{Liberar}(W_i)$ altera únicamente dónde reside un tensor, no su valor; la
-aritmética es invariante a la ubicación en el dispositivo.
+Finalmente, $\textsc{Liberar}(W_i)$ solo reubica un tensor; la aritmética es invariante a la
+ubicación en el dispositivo.
 \end{IEEEproof}
 
 \begin{corollary}[No es una aproximación]
@@ -370,10 +389,10 @@ o a cualquier parametrización de $\theta$. Lo verificamos con dos adaptadores d
 El \Cref{thm:exact} afirma la igualdad en aritmética exacta; dos puntos merecen atención en la
 práctica. Primero, los pesos se preservan exactamente: $\textsc{Cargar}$ relee el mismo tensor
 fp16, de modo que no se produce recuantización, y esto se cumple incondicionalmente. Segundo, si la
-recomputación selecciona un núcleo distinto del pase hacia adelante original, el orden de reducción
-en punto flotante puede diferir en los últimos bits. Este es el no determinismo inherente al
-checkpointing de activaciones estándar~\cite{chen2016checkpointing} y no es específico de \usf{}.
-En nuestras mediciones, con formas y núcleos idénticos, la concordancia es exacta
+recomputación selecciona un \emph{kernel} distinto del pase hacia adelante original, el orden de
+reducción en punto flotante puede diferir en los últimos bits. Este es el no determinismo inherente
+al checkpointing de activaciones estándar~\cite{chen2016checkpointing} y no es específico de
+\usf{}. En nuestras mediciones, con formas y \emph{kernels} idénticos, la concordancia es exacta
 (\Cref{tab:exact}).
 \end{remark}
 
@@ -386,10 +405,10 @@ En nuestras mediciones, con formas y núcleos idénticos, la concordancia es exa
 Bajo el \Cref{alg:usf} con granularidad $\mathcal{U}$, la memoria pico del dispositivo satisface
 \begin{equation}
 \label{eq:vram}
-\mathrm{VRAM}_{\text{pico}} \;\le\; \underbrace{\max_u \Wu \cdot s}_{\text{unidad residente}}
-\;+\; \underbrace{|\theta|\cdot s_{\text{opt}}}_{\text{adaptadores}}
-\;+\; \underbrace{A}_{\text{activaciones}}
-\;+\; \underbrace{K}_{\text{checkpoints}},
+\mathrm{VRAM}_{\text{pico}} \le \underbrace{\max_u \Wu \cdot s}_{\text{unidad residente}}
++ \underbrace{|\theta|\cdot s_{\text{opt}}}_{\text{adaptadores}}
++ \underbrace{A}_{\text{activaciones}}
++ \underbrace{K}_{\text{checkpoints}},
 \end{equation}
 donde $A$ es la memoria de activaciones internas de una \emph{única} unidad y
 $K = L\cdot B\cdot S\cdot d\cdot s$ si los checkpoints $\{c_i\}$ residen en el dispositivo.
@@ -407,8 +426,8 @@ tensores que sobreviven entre iteraciones.
 
 \begin{corollary}[Independencia de la profundidad]
 \label{cor:depth}
-Los checkpoints $c_i$ son activaciones, no pesos, y no se requieren en el dispositivo entre su
-producción y su uso. Descargarlos a la memoria del anfitrión da $K \approx 0$ y por tanto
+Los checkpoints $c_i$ son activaciones, y a diferencia de los pesos no se requieren en el
+dispositivo entre su producción y su uso. Descargarlos a la memoria del anfitrión da $K \approx 0$ y por tanto
 \begin{equation}
 \mathrm{VRAM}_{\text{pico}} \;\approx\; \max_u \Wu \cdot s + |\theta| \cdot s_{\text{opt}} + A ,
 \end{equation}
@@ -422,8 +441,8 @@ presentan el mismo requisito de memoria, por muy distintos que sean sus números
 parámetros.
 \end{corollary}
 
-El \Cref{cor:size} es la afirmación central del artículo, y conviene precisar qué dice y qué no.
-No dice que un modelo mayor sea tan barato de ajustar como uno menor: los costes de E/S y de
+El \Cref{cor:size} es la afirmación central del artículo. No dice que un modelo mayor sea tan
+barato de ajustar como uno menor: los costes de E/S y de
 cómputo escalan ambos con $\sum_i |W_i|$, como cuantifica la \Cref{sec:cost}. Dice que esos costes
 se pagan en \emph{tiempo}, no en \emph{memoria}. El requisito del dispositivo lo fija la unidad
 individual más grande y nada más, razón por la cual la jerarquía de granularidad de la sección
@@ -456,7 +475,7 @@ granularidad de \emph{capa}, con 1,59\,GB por bloque; no se requiere refinamient
 de 405\,B no cabe con granularidad de capa ni de sub-capa, pero su matriz individual más grande
 ocupa 1,62\,GB y sí cabría, que es el contenido del \Cref{cor:size} llevado a su extremo.
 
-\begin{remark}[Un límite de implementación, expuesto sin rodeos]
+\begin{remark}[Límite de implementación]
 \label{rem:matrixlimit}
 El \Cref{thm:gran} es un enunciado sobre particiones y se cumple con granularidad de matriz.
 Nuestra \emph{implementación}, sin embargo, admite únicamente granularidad de capa y de sub-capa.
@@ -588,7 +607,7 @@ $\nabla_\theta \ell = \sum_{j=1}^{G} \nabla_\theta \ell^{(j)}$. La suma es conmu
 asociativa, de modo que el orden en que se acumulan los términos no afecta al resultado. Cada
 $\nabla_\theta \ell^{(j)}$ se computa mediante el VJP local del \Cref{thm:exact}, evaluado en
 $(c_i^{(j)}, W_i, \theta_i)$: los mismos puntos que en la planificación batch-major. Intercambiar
-los bucles cambia el orden de las visitas, no ningún punto de evaluación.
+los bucles solo reordena estas visitas; deja intacto cada punto de evaluación.
 
 \emph{E/S.} En la \Cref{def:lm} el bucle externo recorre $i$ una sola vez por paso de optimizador,
 de modo que cada $W_i$ se carga exactamente una vez por pase y dos en total (adelante y atrás), lo
@@ -599,18 +618,19 @@ completo $G$ veces.
 El coste es que deben mantenerse $G$ conjuntos de activaciones en cada frontera de unidad,
 $G \cdot B \cdot S \cdot d \cdot s$ bytes; para $G=8$, $B=4$, $S=256$, $d=3584$ en fp16 esto son
 59\,MB por frontera, y por el \Cref{cor:depth} pueden ubicarse en la memoria del anfitrión. El
-intercambio es, por tanto, $G$ veces menos E/S a cambio de $G$ veces más activaciones descargables.
+intercambio es, por tanto, $G$ veces menos E/S a cambio de $G$ veces más activaciones descargables al anfitrión.
 
-\begin{proposition}[Elección de $G$]
-\label{prop:G}
 Bajo layer-major, el tiempo por ejemplo es
 \begin{equation}
+\label{eq:choiceG}
 T_{\text{ej}}(G) = \frac{2\sum_i |W_i|}{\mathrm{BW}\cdot G\cdot B} + \frac{C}{B},
 \end{equation}
-con $C$ el tiempo de cómputo de un micro-lote y $\mathrm{BW}$ el ancho de banda de disco.
-$T_{\text{ej}}$ es monótonamente decreciente en $G$ y converge al límite de cómputo $C/B$. Es
-óptimo, por tanto, el mayor $G$ que satisfaga la restricción de memoria de activaciones.
-\end{proposition}
+con $C$ el tiempo de cómputo de un micro-lote y $\mathrm{BW}$ el ancho de banda efectivo de carga
+de pesos, medido de extremo a extremo a través de $\textsc{Cargar}$, no la velocidad cruda de
+lectura del disco (la \Cref{sec:cost} cuantifica la brecha). $G$ solo aparece en el término de E/S,
+en el denominador, así que $T_{\text{ej}}$ decrece monótonamente en $G$ hacia el límite de cómputo
+$C/B$: el mayor $G$ que el presupuesto de memoria de activaciones permita es óptimo, sin que haga
+falta ningún argumento adicional.
 
 \begin{remark}[Por qué está ausente del trabajo previo]
 Layer-major carece de sentido cuando el modelo es residente: si $W_i$ nunca abandona el
@@ -637,7 +657,8 @@ $u$.
 \end{proposition}
 
 \begin{IEEEproof}
-La planificación es un cauce de dos etapas (carga; cómputo) con búferes independientes. En régimen
+La planificación es un \emph{pipeline} de dos etapas (carga; cómputo) con búferes
+independientes. En régimen
 estacionario su rendimiento es el de la etapa más lenta, y el llenado inicial aporta
 $t_{\text{io}}(u_1)$.
 \end{IEEEproof}
@@ -658,8 +679,16 @@ afectado; hecho que verificamos en lugar de suponer (\Cref{tab:exact}).
 \section{Modelo de Coste}
 \label{sec:cost}
 
-Sean $N = \sum_i |W_i| / s$ el número de parámetros transmitidos, $\mathrm{BW}$ el ancho de banda
-efectivo de disco y $\Phi$ el rendimiento efectivo del dispositivo. Empleando la estimación
+Sean $N = \sum_i |W_i| / s$ el número de parámetros transmitidos, $\Phi$ el rendimiento efectivo del
+dispositivo, y $\mathrm{BW}$ el ancho de banda efectivo de \emph{carga de pesos}: el throughput
+medido de pared de $\textsc{Cargar}$ de extremo a extremo ---lectura del archivo, deserialización de
+safetensors y copia al dispositivo--- no la velocidad de lectura secuencial cruda del disco. La
+distinción importa: una lectura cruda de un fragmento del modelo en nuestro NVMe alcanza
+1,3--1,7\,GB/s (\texttt{dd}, \texttt{O\_DIRECT}), aproximadamente $3\times$ nuestro
+$\mathrm{BW}=0{,}54$\,GB/s calibrado; la brecha es sobrecarga del lado de Python y de la
+deserialización dentro de $\textsc{Cargar}$, no una propiedad del disco. La \eqref{eq:tio} usa los
+0,54\,GB/s calibrados en todo momento, pues eso es lo que realmente limita un paso de entrenamiento,
+no la capacidad cruda del disco. Empleando la estimación
 estándar de $6N$ FLOPs por token para un pase combinado hacia adelante y hacia
 atrás~\cite{kaplan2020scaling},
 \begin{align}
@@ -681,8 +710,8 @@ $\Phi = 0{,}7$\,TFLOP/s, $\mathrm{BW}=0{,}54$\,GB/s) el umbral es $\approx 8{,}6
 tokens por paso. Un paso layer-major con $G=8$, $B=4$, $S=256$ procesa $8192$ tokens y está por
 tanto firmemente limitado por cómputo, con un orden de magnitud de margen: el reordenamiento del
 \Cref{thm:lm} no se limita a acelerar el sistema, cambia qué recurso lo limita. Este es el
-razonamiento roofline de~\cite{williams2009roofline} aplicado a un bucle de entrenamiento fuera de
-núcleo.
+razonamiento roofline de~\cite{williams2009roofline} aplicado a un bucle de entrenamiento
+\emph{out-of-core}.
 
 \textbf{Validación.} Calibramos $\mathrm{BW}$ y $\Phi$ a partir de dos mediciones independientes
 ($B=1$ y $B=4$) y empleamos el modelo para predecir el resto. La \Cref{tab:cost} recoge el
@@ -713,7 +742,7 @@ Los \Cref{thm:vram,thm:gran} proporcionan un criterio operativo. Dado un presupu
 $V$, recórranse las granularidades de la más gruesa a la más fina y devuélvase la primera cuya cota
 quepa.
 
-\begin{proposition}[Optimalidad del ajuste más grueso]
+\begin{proposition}[Optimalidad de la granularidad más gruesa]
 \label{prop:auto}
 La granularidad más gruesa que satisface~\eqref{eq:vram} minimiza el tiempo sujeto a la restricción
 de memoria.
@@ -740,14 +769,19 @@ indica explícitamente cuándo una granularidad no implementada habría bastado.
 
 \subsection{Configuración}
 
-Todos los experimentos se ejecutan en un único equipo de escritorio con una NVIDIA GTX~1050
-(3,94\,GB utilizables), 8 núcleos de CPU, 15,5\,GB de memoria de anfitrión y un disco NVMe. El
+Todos los experimentos se ejecutan en un único equipo portátil con una NVIDIA GeForce GTX~1050
+móvil (GP107M, Pascal, 3,94\,GB utilizables, sin tensor cores), 8 núcleos de CPU, 15,5\,GB de
+memoria de anfitrión y un disco NVMe. Elegimos esta tarjeta deliberadamente: no es una opción
+razonable para entrenar a gran escala, y ese es precisamente el punto---si la cota del
+\Cref{thm:vram} se cumple aquí, se cumple en cualquier GPU que un practicante sin acceso a un
+centro de datos pueda razonablemente poseer. El
 modelo es Qwen2.5-7B-Instruct~\cite{qwen2025} (7,62\,B parámetros, 28 capas, fp16), ajustado sobre
 Alpaca~\cite{alpaca2023} con AdamW~\cite{loshchilov2019adamw}, $S=256$, precisión
 mixta~\cite{micikevicius2018mixed}, en PyTorch~\cite{paszke2019pytorch} con
 Transformers~\cite{wolf2020transformers}. Se emplean dos adaptadores para sustanciar el
 \Cref{cor:agnostic}: LoRA~\cite{hu2022lora} con rangos 1, 2 y 8, y \sthree{}, un adaptador
-espectral-espacial-suave descrito en un artículo complementario. Este trabajo no formula
+\emph{spectral--spatial--smooth} (espectral, espacial y suave, de donde las tres eses) descrito en
+un artículo complementario. Este trabajo no formula
 afirmación alguna sobre la calidad relativa de ambos; aparecen aquí como evidencia de que \usf{} es
 indiferente a esa elección.
 
@@ -771,15 +805,16 @@ desviación medida para cada una. Todas las entradas son exactamente cero.
 de tensores de gradiente entrenables comparados.}
 \label{tab:exact}
 \footnotesize
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}llrr@{}}
 \toprule
 \textbf{Afirmación} & \textbf{Comparación} & \textbf{Tensores} & $\max|\Delta|$ \\
 \midrule
 \Cref{thm:exact}     & transmitido vs.\ residente        & 150  & $0{,}00$ \\
 \Cref{thm:lm}        & layer- vs.\ batch-major (7B)      & 1400 & $0{,}00$ \\
-\Cref{cor:depth}     & checkpoints en anfitrión vs.\ dispositivo & 150 & $0{,}00$ \\
+\Cref{cor:depth}     & checkpoints en anfitrión vs.\ GPU & 150  & $0{,}00$ \\
 \Cref{thm:gran}      & sub-capa vs.\ capa                & 150  & $0{,}00$ \\
-\Cref{prop:prefetch} & prefetch activado vs.\ desactivado & 150  & $0{,}00$ \\
+\Cref{prop:prefetch} & con vs.\ sin prefetch             & 150  & $0{,}00$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -832,9 +867,9 @@ asignador; la ocupación total del dispositivo incluyendo el contexto CUDA alcan
 es, el 71,7\,\% de los 4034\,MB que la tarjeta expone a CUDA. La afirmación sobrevive bajo la
 medida más estricta, que es precisamente la razón para enunciarla. Nótese además que la memoria
 pico no es monótona en el tamaño del adaptador ---LoRA $r{=}1$ ocupa más que $r{=}2$ bajo
-\emph{resv} y \emph{smi}--- porque a esta escala domina la fragmentación del asignador y no el
-número de parámetros; el \Cref{thm:vram} acota la asignación, no la política de caché del
-asignador.
+\emph{resv} y \emph{smi}--- porque a esta escala la fragmentación del asignador pesa mucho más que
+el número de parámetros. El \Cref{thm:vram} acota la asignación misma; la política de caché del
+asignador es una cuestión aparte.
 
 \subsection{Aprendizaje de extremo a extremo}
 
@@ -875,8 +910,8 @@ residente.}
 $B{=}4$, $G{=}2$) sobre 1100 ejemplos de Alpaca. La perplejidad en datos reservados, medida sobre
 100 ejemplos no vistos antes y después, cayó de 11,96 a 5,50. Ningún paso fue omitido por
 desbordamiento de gradiente. Por el \Cref{thm:exact} esta trayectoria es la que habría producido
-el entrenamiento ordinario con residencia; la mostramos como evidencia de que el sistema entrena,
-no como una afirmación de calidad.}
+el entrenamiento ordinario con residencia: lo que la curva demuestra es que el sistema aprende;
+qué tan bien lo hace queda fuera del alcance de este artículo.}
 \label{fig:loss}
 \end{figure}
 
@@ -884,8 +919,8 @@ no como una afirmación de calidad.}
 
 La \Cref{tab:lm} compara ambas planificaciones sobre el modelo de 7\,B en 16 ejemplos con $G=4$.
 Layer-major es $1{,}40\times$ más rápido y emplea \emph{menos} memoria, esto último porque sus
-checkpoints residen en el anfitrión (\Cref{cor:depth}). La \Cref{prop:G} predice mayores ganancias
-con $G$ superior; no las medimos.
+checkpoints residen en el anfitrión (\Cref{cor:depth}). La \eqref{eq:choiceG} predice mayores
+ganancias con $G$ superior; no las medimos.
 
 \begin{table}[t]
 \centering
@@ -929,7 +964,6 @@ memoria con precisión, \usf{} la compra con tiempo, y solo esta última es exac
 \label{sec:scaling}
 
 La \Cref{tab:claims} enuncia qué establece este artículo en cada escala y sobre qué base.
-Consideramos la distinción lo bastante importante como para tabularla en lugar de dejarla en prosa.
 
 \begin{table}[t]
 \centering
@@ -977,9 +1011,9 @@ local, y $\mathrm{BW}$ acota el término de E/S de~\eqref{eq:tio}.
 
 \textbf{La hipótesis PEFT es estructural.} El \Cref{thm:vram} trata $|\theta|\cdot s_{\text{opt}}$
 como pequeño. Con muchos parámetros entrenables, el estado del optimizador deja de ser
-despreciable y su particionado pasa a ser la preocupación dominante: el régimen de
-ZeRO~\cite{rajbhandari2020zero}, no el de este artículo. \usf{} es un método para PEFT, no para
-preentrenamiento.
+despreciable y su particionado pasa a ser la preocupación dominante, precisamente el régimen que
+aborda ZeRO~\cite{rajbhandari2020zero}. \usf{} apunta a PEFT; el preentrenamiento queda fuera de
+su alcance.
 
 \textbf{La granularidad de matriz no está implementada} (\Cref{rem:matrixlimit}), razón por la cual
 la \Cref{tab:claims} asigna a 405\,B un estatus más débil que a 70\,B.
@@ -995,14 +1029,16 @@ la \Cref{tab:claims} asigna a 405\,B un estatus más débil que a 70\,B.
 
 Hemos mostrado que la memoria necesaria para ajustar un modelo de lenguaje congelado no es función
 del tamaño del modelo. Es función de su unidad transmisible más grande, porque la diferenciación en
-modo inverso es local y la residencia es, por tanto, una cuestión de planificación y no de
-corrección. El método resultante es exacto ---verificado con desviación nula sobre el propio modelo
-de 7\,B---, agnóstico al adaptador y gobernado por un modelo de coste preciso dentro de un 6\,\%.
+modo inverso es local: nada en la corrección ata un peso al dispositivo una vez computado su VJP,
+así que cuánto tiempo permanece residente es algo que nos toca a nosotros planificar. El método
+resultante es exacto ---verificado con desviación nula sobre el propio modelo de 7\,B---, agnóstico
+al adaptador y gobernado por un modelo de coste preciso dentro de un 6\,\%.
 Su consecuencia es un desplazamiento, y no una eliminación, del coste: el tamaño del modelo pasa a
 ser una cuestión de tiempo y almacenamiento. En una GPU de consumo que un centro de datos
 consideraría obsoleta, un modelo de 7\,B puede ahora ajustarse de forma exacta; la misma cota, con
-una granularidad implementada, sitúa un modelo de 70\,B al alcance de esa misma tarjeta. Lo que
-sigue siendo escaso es el tiempo, y el tiempo es un adversario más tratable que un muro de memoria.
+una granularidad implementada, sitúa un modelo de 70\,B al alcance de esa misma tarjeta. La barrera
+que queda es el tiempo, que la \Cref{sec:scaling} cuantifica y que ---a diferencia de la memoria---
+no excluye a nadie de empezar.
 
 \bibliographystyle{IEEEtran}
 \bibliography{refs}

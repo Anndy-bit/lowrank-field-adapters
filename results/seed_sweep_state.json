@@ -1,0 +1,16 @@
+{
+  "done": {
+    "capacity_seed42_nmf_b3,no_nmf_h64": {
+      "wall_min": 110.0,
+      "ts": "2026-07-18T13:25:03"
+    },
+    "operators_seed43_all": {
+      "wall_min": 245.4,
+      "ts": "2026-07-19T01:00:06"
+    },
+    "capacity_seed43_all": {
+      "wall_min": 297.0,
+      "ts": "2026-07-19T11:38:43"
+    }
+  }
+}

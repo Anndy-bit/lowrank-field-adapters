@@ -1,0 +1,151 @@
+\begin{thebibliography}{10}
+\expandafter\ifx\csname url\endcsname\relax
+  \def\url#1{\texttt{#1}}\fi
+\expandafter\ifx\csname urlprefix\endcsname\relax\def\urlprefix{URL }\fi
+\expandafter\ifx\csname href\endcsname\relax
+  \def\href#1#2{#2} \def\path#1{#1}\fi
+
+\bibitem{hu2022lora}
+E.~J. Hu, Y.~Shen, P.~Wallis, Z.~Allen-Zhu, Y.~Li, S.~Wang, L.~Wang, W.~Chen,
+  {LoRA}: Low-rank adaptation of large language models, in: International
+  Conference on Learning Representations (ICLR), 2022.
+
+\bibitem{houlsby2019adapters}
+N.~Houlsby, A.~Giurgiu, S.~Jastrzebski, B.~Morrone, Q.~de~Laroussilhe,
+  A.~Gesmundo, M.~Attariyan, S.~Gelly, Parameter-efficient transfer learning
+  for {NLP}, in: International Conference on Machine Learning (ICML), 2019.
+
+\bibitem{lester2021prompt}
+B.~Lester, R.~Al-Rfou, N.~Constant, The power of scale for parameter-efficient
+  prompt tuning, in: Conference on Empirical Methods in Natural Language
+  Processing (EMNLP), 2021.
+
+\bibitem{dettmers2023qlora}
+T.~Dettmers, A.~Pagnoni, A.~Holtzman, L.~Zettlemoyer, {QLoRA}: Efficient
+  finetuning of quantized {LLMs}, in: Advances in Neural Information Processing
+  Systems (NeurIPS), 2023.
+
+\bibitem{dettmers2022int8}
+T.~Dettmers, M.~Lewis, Y.~Belkada, L.~Zettlemoyer, {LLM.int8()}: 8-bit matrix
+  multiplication for transformers at scale, in: Advances in Neural Information
+  Processing Systems (NeurIPS), 2022.
+
+\bibitem{rajbhandari2021zeroinfinity}
+S.~Rajbhandari, O.~Ruwase, J.~Rasley, S.~Smith, Y.~He, {ZeRO-Infinity}:
+  Breaking the {GPU} memory wall for extreme scale deep learning, in:
+  Proceedings of the International Conference for High Performance Computing,
+  Networking, Storage and Analysis (SC), 2021.
+
+\bibitem{griewank2008evaluating}
+A.~Griewank, A.~Walther, Evaluating Derivatives: Principles and Techniques of
+  Algorithmic Differentiation, 2nd Edition, SIAM, 2008.
+
+\bibitem{baydin2018autodiff}
+A.~G. Baydin, B.~A. Pearlmutter, A.~A. Radul, J.~M. Siskind, Automatic
+  differentiation in machine learning: a survey, Journal of Machine Learning
+  Research 18~(153) (2018) 1--43.
+
+\bibitem{liu2024dora}
+S.-Y. Liu, C.-Y. Wang, H.~Yin, P.~Molchanov, Y.-C.~F. Wang, K.-T. Cheng, M.-H.
+  Chen, {DoRA}: Weight-decomposed low-rank adaptation, in: International
+  Conference on Machine Learning (ICML), 2024.
+
+\bibitem{rajbhandari2020zero}
+S.~Rajbhandari, J.~Rasley, O.~Ruwase, Y.~He, {ZeRO}: Memory optimizations
+  toward training trillion parameter models, in: Proceedings of the
+  International Conference for High Performance Computing, Networking, Storage
+  and Analysis (SC), 2020.
+
+\bibitem{ren2021zerooffload}
+J.~Ren, S.~Rajbhandari, R.~Y. Aminabadi, O.~Ruwase, S.~Yang, M.~Zhang, D.~Li,
+  Y.~He, {ZeRO-Offload}: Democratizing billion-scale model training, in: USENIX
+  Annual Technical Conference (ATC), 2021.
+
+\bibitem{accelerate2022}
+S.~Gugger, L.~Debut, T.~Wolf, P.~Schmid, Z.~Mueller, S.~Mangrulkar, M.~Sun,
+  B.~Bossan, Accelerate: Training and inference at scale made simple, efficient
+  and adaptable, \url{https://github.com/huggingface/accelerate} (2022).
+
+\bibitem{chen2016checkpointing}
+T.~Chen, B.~Xu, C.~Zhang, C.~Guestrin, Training deep nets with sublinear memory
+  cost, arXiv preprint arXiv:1604.06174 (2016).
+
+\bibitem{griewank2000revolve}
+A.~Griewank, A.~Walther, Algorithm 799: {Revolve}: An implementation of
+  checkpointing for the reverse or adjoint mode of computational
+  differentiation, ACM Transactions on Mathematical Software 26~(1) (2000)
+  19--45.
+
+\bibitem{dao2022flashattention}
+T.~Dao, D.~Y. Fu, S.~Ermon, A.~Rudra, C.~R{\'e}, {FlashAttention}: Fast and
+  memory-efficient exact attention with {IO}-awareness, in: Advances in Neural
+  Information Processing Systems (NeurIPS), 2022.
+
+\bibitem{williams2009roofline}
+S.~Williams, A.~Waterman, D.~Patterson, Roofline: An insightful visual
+  performance model for multicore architectures, Communications of the ACM
+  52~(4) (2009) 65--76.
+
+\bibitem{huang2019gpipe}
+Y.~Huang, Y.~Cheng, A.~Bapna, O.~Firat, D.~Chen, M.~Chen, H.~Lee, J.~Ngiam,
+  Q.~V. Le, Y.~Wu, Z.~Chen, {GPipe}: Efficient training of giant neural
+  networks using pipeline parallelism, in: Advances in Neural Information
+  Processing Systems (NeurIPS), 2019.
+
+\bibitem{jia2019beyond}
+Z.~Jia, M.~Zaharia, A.~Aiken, Beyond data and model parallelism for deep neural
+  networks, in: Proceedings of Machine Learning and Systems (MLSys), 2019.
+
+\bibitem{grattafiori2024llama3}
+A.~Grattafiori, A.~Dubey, A.~Jauhri, et~al., The {Llama} 3 herd of models,
+  arXiv preprint arXiv:2407.21783 (2024).
+
+\bibitem{wolf2020transformers}
+T.~Wolf, L.~Debut, V.~Sanh, J.~Chaumond, C.~Delangue, et~al., Transformers:
+  State-of-the-art natural language processing, in: Conference on Empirical
+  Methods in Natural Language Processing: System Demonstrations (EMNLP), 2020.
+
+\bibitem{su2024roformer}
+J.~Su, M.~Ahmed, Y.~Lu, S.~Pan, W.~Bo, Y.~Liu, {RoFormer}: Enhanced transformer
+  with rotary position embedding, Neurocomputing 568 (2024).
+
+\bibitem{shazeer2019mqa}
+N.~Shazeer, Fast transformer decoding: One write-head is all you need, arXiv
+  preprint arXiv:1911.02150 (2019).
+
+\bibitem{kaplan2020scaling}
+J.~Kaplan, S.~McCandlish, T.~Henighan, T.~B. Brown, B.~Chess, R.~Child,
+  S.~Gray, A.~Radford, J.~Wu, D.~Amodei, Scaling laws for neural language
+  models, arXiv preprint arXiv:2001.08361 (2020).
+
+\bibitem{qwen2025}
+{Qwen Team}, {Qwen2.5} technical report, arXiv preprint arXiv:2412.15115
+  (2025).
+
+\bibitem{alpaca2023}
+R.~Taori, I.~Gulrajani, T.~Zhang, Y.~Dubois, X.~Li, C.~Guestrin, P.~Liang,
+  T.~B. Hashimoto, Stanford {Alpaca}: An instruction-following {LLaMA} model,
+  \url{https://github.com/tatsu-lab/stanford_alpaca} (2023).
+
+\bibitem{loshchilov2019adamw}
+I.~Loshchilov, F.~Hutter, Decoupled weight decay regularization, in:
+  International Conference on Learning Representations (ICLR), 2019.
+
+\bibitem{micikevicius2018mixed}
+P.~Micikevicius, S.~Narang, J.~Alben, G.~Diamos, E.~Elsen, D.~Garcia, et~al.,
+  Mixed precision training, in: International Conference on Learning
+  Representations (ICLR), 2018.
+
+\bibitem{paszke2019pytorch}
+A.~Paszke, S.~Gross, F.~Massa, A.~Lerer, J.~Bradbury, G.~Chanan, et~al.,
+  {PyTorch}: An imperative style, high-performance deep learning library, in:
+  Advances in Neural Information Processing Systems (NeurIPS), 2019.
+
+\bibitem{usfcode}
+{USF}: Reference implementation of unit-streamed fine-tuning,
+  \url{https://github.com/Anndy-bit/lowrank-field-adapters/tree/v1.0-usf-paper1},
+  source code, experiment configurations and run logs. Tagged release
+  \texttt{v1.0-usf-paper1} (commit \texttt{9a86aed}): the exact revision that
+  produced every measurement reported here (2026).
+
+\end{thebibliography}

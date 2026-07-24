@@ -1,0 +1,65 @@
+/home/gula/Documentos/Proyectos Github/lowrank-field-adapters/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+Using the latest cached version of the dataset since tatsu-lab/alpaca couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/gula/.cache/huggingface/datasets/tatsu-lab___alpaca/default/0.0.0/dce01c9b08f87459cf36a430d809084718273017 (last modified on Tue Jul 14 22:51:07 2026).
+/home/gula/Documentos/Proyectos Github/lowrank-field-adapters/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+
+[ablations] 4 variants x 150 examples (batch=4) ~ ETA 4.5h total (~1.1h/variant)
+
+################################################################
+# ABLATION [capacity]: nmf_b1
+################################################################
+[S3Trainer] trainable=401,464 / 7,616,017,976 (0.0053%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: NFR(N:2->4), SGC(inherent)
+[E1 B0] loss=3.1572 vram_peak=963MB fwd=19683ms bwd=18080ms
+[E1 B10] loss=2.2126 vram_peak=991MB fwd=9635ms bwd=20951ms
+[E1 B20] loss=1.5040 vram_peak=1047MB fwd=8494ms bwd=26634ms
+[E1 B30] loss=1.5585 vram_peak=1243MB fwd=12906ms bwd=38898ms
+[nmf_b1] ppl 11.966 -> 6.832 (Δ -5.134)  params=401,464  VRAM=1585.3MB
+
+################################################################
+# ABLATION [capacity]: nmf_b2
+################################################################
+[S3Trainer] trainable=802,928 / 7,616,419,440 (0.0105%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: NFR(N:2->4), SGC(inherent)
+[E1 B0] loss=3.1570 vram_peak=965MB fwd=25250ms bwd=25846ms
+[E1 B10] loss=2.1207 vram_peak=996MB fwd=4807ms bwd=29959ms
+[E1 B20] loss=1.4333 vram_peak=1052MB fwd=14789ms bwd=22785ms
+[E1 B30] loss=1.5156 vram_peak=1248MB fwd=11263ms bwd=43337ms
+[nmf_b2] ppl 11.956 -> 6.537 (Δ -5.419)  params=802,928  VRAM=1626.6MB
+
+################################################################
+# ABLATION [capacity]: svmo_h64
+################################################################
+[S3Trainer] trainable=853,188 / 7,616,469,700 (0.0112%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: SGC(inherent)
+[E1 B0] loss=3.1561 vram_peak=1588MB fwd=21465ms bwd=22785ms
+[E1 B10] loss=2.8149 vram_peak=1616MB fwd=7691ms bwd=23463ms
+[E1 B20] loss=2.2106 vram_peak=1664MB fwd=6500ms bwd=27257ms
+[E1 B30] loss=1.9185 vram_peak=1830MB fwd=12988ms bwd=37376ms
+[svmo_h64] ppl 11.959 -> 11.652 (Δ -0.307)  params=853,188  VRAM=1974.0MB
+
+################################################################
+# ABLATION [capacity]: full_nmf_b1
+################################################################
+[S3Trainer] trainable=1,086,204 / 7,616,702,716 (0.0143%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: NFR(N:2->4), SBS, SGC(inherent)
+[E1 B0] loss=3.1571 vram_peak=1625MB fwd=27806ms bwd=21960ms
+[E1 B10] loss=1.9517 vram_peak=1660MB fwd=29851ms bwd=40551ms
+[E1 B20] loss=1.2695 vram_peak=1718MB fwd=8599ms bwd=31349ms
+[E1 B30] loss=1.4501 vram_peak=1920MB fwd=14945ms bwd=41955ms
+[full_nmf_b1] ppl 11.957 -> 5.673 (Δ -6.284)  params=1,086,204  VRAM=2114.9MB
+
+# S³ Ablations (RQ4)
+
+Same data + seed across all variants. Lower Δppl = better.
+
+| ablation | trainable | base ppl | after ppl | Δ ppl | final loss | min loss | VRAM MB | tok/s | wall min | grad svmo | grad nmf | grad stb |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| nmf_b1 | 401,464 | 11.9657 | 6.8319 | -5.1338 | 1.1883 | 1.0817 | 1585.3 | 5.11 | 33.17 | 0.0 | 0.63129 | 0.0 |
+| nmf_b2 | 802,928 | 11.9557 | 6.5369 | -5.4188 | 1.1599 | 1.0465 | 1626.6 | 5.1 | 33.21 | 0.0 | 0.70346 | 0.0 |
+| svmo_h64 | 853,188 | 11.9587 | 11.6516 | -0.3071 | 1.3392 | 1.3392 | 1974.0 | 5.41 | 31.34 | 0.36443 | 0.0 | 0.0 |
+| full_nmf_b1 | 1,086,204 | 11.9566 | 5.6728 | -6.2838 | 1.1363 | 0.9528 | 2114.9 | 5.1 | 33.21 | 0.2056 | 0.61921 | 0.30407 |
+
+[ablations] comparison table + per-variant reports: ./results/ablations_capacity_20260715_211509

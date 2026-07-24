@@ -1,0 +1,89 @@
+/home/gula/Documentos/Proyectos Github/lowrank-field-adapters/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+Using the latest cached version of the dataset since tatsu-lab/alpaca couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/gula/.cache/huggingface/datasets/tatsu-lab___alpaca/default/0.0.0/dce01c9b08f87459cf36a430d809084718273017 (last modified on Tue Jul 14 22:51:07 2026).
+/home/gula/Documentos/Proyectos Github/lowrank-field-adapters/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+
+[ablations] 5 variants x 200 examples (batch=4) ~ ETA 7.5h total (~1.5h/variant)
+
+################################################################
+# ABLATION: full
+################################################################
+[S3Trainer] trainable=3,896,452 / 7,619,512,964 (0.0511%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: NFR(N:2->4), SBS, SGC(inherent)
+[E1 B0] loss=3.4455 vram_peak=1633MB fwd=22645ms bwd=19283ms
+[E1 B10] loss=1.4746 vram_peak=1686MB fwd=11727ms bwd=22905ms
+[E1 B20] loss=1.2674 vram_peak=1709MB fwd=4959ms bwd=31086ms
+[E1 B30] loss=1.8017 vram_peak=1805MB fwd=13733ms bwd=36712ms
+[E1 B40] loss=1.3828 vram_peak=1937MB fwd=17149ms bwd=53207ms
+[full] ppl 11.959 -> 5.310 (Δ -6.649)  params=3,896,452  VRAM=2238.2MB
+
+################################################################
+# ABLATION: no_stb
+################################################################
+[S3Trainer] trainable=3,437,700 / 7,619,054,212 (0.0451%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: NFR(N:2->4), SGC(inherent)
+[E1 B0] loss=3.4453 vram_peak=1604MB fwd=29839ms bwd=20823ms
+[E1 B10] loss=1.8362 vram_peak=1653MB fwd=7340ms bwd=22057ms
+[E1 B20] loss=1.5247 vram_peak=1675MB fwd=14492ms bwd=22920ms
+[E1 B30] loss=1.8875 vram_peak=1768MB fwd=15579ms bwd=38738ms
+[E1 B40] loss=1.4211 vram_peak=1896MB fwd=15469ms bwd=47213ms
+[no_stb] ppl 11.959 -> 5.540 (Δ -6.419)  params=3,437,700  VRAM=2241.5MB
+
+################################################################
+# ABLATION: no_nmf
+################################################################
+[S3Trainer] trainable=684,740 / 7,616,301,252 (0.0090%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: SBS, SGC(inherent)
+[E1 B0] loss=3.4443 vram_peak=1612MB fwd=21424ms bwd=25726ms
+[E1 B10] loss=2.3625 vram_peak=1637MB fwd=9706ms bwd=26546ms
+[E1 B20] loss=1.4617 vram_peak=1656MB fwd=7328ms bwd=26290ms
+[E1 B30] loss=1.8993 vram_peak=1737MB fwd=15788ms bwd=34115ms
+[E1 B40] loss=1.4586 vram_peak=1848MB fwd=13044ms bwd=50840ms
+[no_nmf] ppl 11.955 -> 6.227 (Δ -5.729)  params=684,740  VRAM=1939.4MB
+
+################################################################
+# ABLATION: svmo_only
+################################################################
+[S3Trainer] trainable=225,988 / 7,615,842,500 (0.0030%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: SGC(inherent)
+[E1 B0] loss=3.4440 vram_peak=1583MB fwd=24432ms bwd=22134ms
+[E1 B10] loss=2.7371 vram_peak=1604MB fwd=4392ms bwd=29477ms
+[E1 B20] loss=2.2572 vram_peak=1622MB fwd=16673ms bwd=21512ms
+[E1 B30] loss=2.5230 vram_peak=1702MB fwd=11886ms bwd=36838ms
+[E1 B40] loss=1.7738 vram_peak=1810MB fwd=15795ms bwd=43062ms
+[svmo_only] ppl 11.959 -> 11.643 (Δ -0.316)  params=225,988  VRAM=2128.3MB
+
+################################################################
+# ABLATION: nmf_only
+################################################################
+[S3Trainer] trainable=3,211,712 / 7,618,828,224 (0.0422%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: NFR(N:2->4), SGC(inherent)
+[E1 B0] loss=3.4448 vram_peak=971MB fwd=19732ms bwd=22951ms
+[E1 B10] loss=1.8334 vram_peak=1018MB fwd=9859ms bwd=34180ms
+[E1 B20] loss=1.5343 vram_peak=1039MB fwd=9019ms bwd=29582ms
+[E1 B30] loss=1.8874 vram_peak=1133MB fwd=7146ms bwd=30713ms
+[E1 B40] loss=1.4094 vram_peak=1261MB fwd=12410ms bwd=57952ms
+[nmf_only] ppl 11.958 -> 5.555 (Δ -6.403)  params=3,211,712  VRAM=1580.5MB
+
+# S³ Ablations (RQ4)
+
+Same data + seed across all variants. Lower Δppl = better.
+
+| ablation | trainable | base ppl | after ppl | Δ ppl | final loss | min loss | VRAM MB | tok/s | wall min | grad svmo | grad nmf | grad stb |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| full | 3,896,452 | 11.9589 | 5.3102 | -6.6487 | 1.272 | 0.9164 | 2238.2 | 5.6 | 38.84 | 0.12987 | 0.90067 | 0.21202 |
+| no_stb | 3,437,700 | 11.9585 | 5.5396 | -6.4189 | 1.2859 | 1.0429 | 2241.5 | 5.4 | 40.29 | 0.10935 | 1.04838 | 0.0 |
+| no_nmf | 684,740 | 11.9554 | 6.2269 | -5.7285 | 1.3215 | 1.0361 | 1939.4 | 5.25 | 41.44 | 0.26034 | 0.0 | 0.39021 |
+| svmo_only | 225,988 | 11.9587 | 11.6427 | -0.316 | 1.5353 | 1.4249 | 2128.3 | 4.99 | 43.61 | 0.37941 | 0.0 | 0.0 |
+| nmf_only | 3,211,712 | 11.9577 | 5.5547 | -6.403 | 1.2841 | 1.0432 | 1580.5 | 5.43 | 40.04 | 0.0 | 0.90913 | 0.0 |
+
+## Operator contribution (Δppl vs `full`, more negative = operator helps)
+
+- removing/keeping-only **no_stb**: +0.2298 ppl vs full
+- removing/keeping-only **no_nmf**: +0.9202 ppl vs full
+- removing/keeping-only **svmo_only**: +6.3327 ppl vs full
+- removing/keeping-only **nmf_only**: +0.2457 ppl vs full
+
+[ablations] comparison table + per-variant reports: ./results/ablations_20260715_162039

@@ -1,0 +1,18 @@
+# S³ Ablations (RQ4)
+
+Same data + seed across all variants. Lower Δppl = better.
+
+| ablation | trainable | base ppl | after ppl | Δ ppl | final loss | min loss | VRAM MB | tok/s | wall min | grad svmo | grad nmf | grad stb |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| full | 3,896,452 | 11.9589 | 5.3102 | -6.6487 | 1.272 | 0.9164 | 2238.2 | 5.6 | 38.84 | 0.12987 | 0.90067 | 0.21202 |
+| no_stb | 3,437,700 | 11.9585 | 5.5396 | -6.4189 | 1.2859 | 1.0429 | 2241.5 | 5.4 | 40.29 | 0.10935 | 1.04838 | 0.0 |
+| no_nmf | 684,740 | 11.9554 | 6.2269 | -5.7285 | 1.3215 | 1.0361 | 1939.4 | 5.25 | 41.44 | 0.26034 | 0.0 | 0.39021 |
+| svmo_only | 225,988 | 11.9587 | 11.6427 | -0.316 | 1.5353 | 1.4249 | 2128.3 | 4.99 | 43.61 | 0.37941 | 0.0 | 0.0 |
+| nmf_only | 3,211,712 | 11.9577 | 5.5547 | -6.403 | 1.2841 | 1.0432 | 1580.5 | 5.43 | 40.04 | 0.0 | 0.90913 | 0.0 |
+
+## Operator contribution (Δppl vs `full`, more negative = operator helps)
+
+- removing/keeping-only **no_stb**: +0.2298 ppl vs full
+- removing/keeping-only **no_nmf**: +0.9202 ppl vs full
+- removing/keeping-only **svmo_only**: +6.3327 ppl vs full
+- removing/keeping-only **nmf_only**: +0.2457 ppl vs full

@@ -1,0 +1,17 @@
+{
+  "quality": {
+    "base": {
+      "eval_loss": 2.25347,
+      "perplexity": 9.5208,
+      "n_batches": 25
+    },
+    "after": {
+      "eval_loss": 2.23452,
+      "perplexity": 9.342,
+      "n_batches": 25
+    }
+  },
+  "total_wall_min": 26.75,
+  "tokens_per_s": 6.33,
+  "vram_peak_mb": 1927.8
+}

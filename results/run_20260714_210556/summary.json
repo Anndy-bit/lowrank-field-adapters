@@ -1,0 +1,19 @@
+{
+  "vram_peak_mb": 1688.6,
+  "tokens_per_s": 1.85,
+  "total_wall_min": 4.73,
+  "tokens_processed": 526,
+  "disk_read_mb_per_step": 24893.3,
+  "quality": {
+    "base": {
+      "eval_loss": 2.48387,
+      "perplexity": 11.9876,
+      "n_batches": 8
+    },
+    "after": {
+      "eval_loss": 1.95325,
+      "perplexity": 7.0516,
+      "n_batches": 8
+    }
+  }
+}

@@ -1,0 +1,2 @@
+timestamp,wall_time_s,step,epoch,batch_idx,micro_step,loss,vram_mb,vram_peak_mb,step_time_ms,tokens_per_sec,lr,nfr_steps,sbs_active_pct,gpu_util_pct,gpu_temp_c,gpu_power_w,gpu_clock_mhz,mem_clock_mhz,cpu_usage_pct,cpu_temp_c,cpu_power_w,ram_gb,layer_fwd_ms,layer_bwd_ms
+2026-07-13T15:59:31.837452,7.7,0,0,0,0,nan,1700.3,1700.3,7633.12,3.5,1.00e-03,4,0.300,11.0,63,0.0,1493,3504,100.2,81.0,0.0,2.2,4579.87,3053.25

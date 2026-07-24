@@ -1,0 +1,164 @@
+/home/gula/Documentos/Proyectos Github/lowrank-field-adapters/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+Using the latest cached version of the dataset since tatsu-lab/alpaca couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/gula/.cache/huggingface/datasets/tatsu-lab___alpaca/default/0.0.0/dce01c9b08f87459cf36a430d809084718273017 (last modified on Tue Jul 14 22:28:26 2026).
+[S³] building Qwen/Qwen2.5-7B-Instruct skeleton on meta (0 memory) ...
+[S³] wrapping decoder layers with S³ + offline SVD from ./svd_factors ...
+[S³] disk-streaming mode: one layer resident on GPU at a time.
+[S3Trainer] trainable=3,896,452 / 7,619,512,964 (0.0511%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: NFR(N:2->4), SBS, SGC(inherent)  | requested (experimental, not altering gradients): TER, DRA, MSO, TOWS, HFISC, FDGD, GNS, EMP, SMV
+[S³] loading Alpaca (cached), batch=4 ...
+Map:   0%|          | 0/1100 [00:00<?, ? examples/s]Map:  17%|█▋        | 191/1100 [00:00<00:00, 1888.15 examples/s]Map:  38%|███▊      | 422/1100 [00:00<00:00, 2129.77 examples/s]Map:  59%|█████▊    | 646/1100 [00:00<00:00, 2171.76 examples/s]Map:  79%|███████▉  | 874/1100 [00:00<00:00, 2209.81 examples/s]Map: 100%|██████████| 1100/1100 [00:00<00:00, 1804.44 examples/s]Map: 100%|██████████| 1100/1100 [00:00<00:00, 1930.97 examples/s]
+Using the latest cached version of the dataset since tatsu-lab/alpaca couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/gula/.cache/huggingface/datasets/tatsu-lab___alpaca/default/0.0.0/dce01c9b08f87459cf36a430d809084718273017 (last modified on Tue Jul 14 22:51:07 2026).
+/home/gula/Documentos/Proyectos Github/lowrank-field-adapters/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[S³] report dir: ./results/run_20260714_225107
+[S³] base eval (adapters at identity) ...
+       base: {'eval_loss': 2.48164, 'perplexity': 11.9609, 'n_batches': 8}
+[S³] training ...
+[E1 B0] loss=5.0325 vram_peak=1620MB fwd=25554ms bwd=22329ms
+[E1 B10] loss=1.8033 vram_peak=1667MB fwd=12467ms bwd=30321ms
+[E1 B20] loss=1.7888 vram_peak=1673MB fwd=13076ms bwd=26194ms
+[E1 B30] loss=1.3480 vram_peak=1679MB fwd=9123ms bwd=33590ms
+[E1 B40] loss=1.5836 vram_peak=1683MB fwd=10975ms bwd=34886ms
+[E1 B50] loss=1.6006 vram_peak=1683MB fwd=7872ms bwd=30771ms
+[E1 B60] loss=1.5528 vram_peak=1692MB fwd=7810ms bwd=30205ms
+[E1 B70] loss=1.7422 vram_peak=1696MB fwd=7232ms bwd=23526ms
+[E1 B80] loss=1.7558 vram_peak=1702MB fwd=8834ms bwd=26906ms
+[E1 B90] loss=1.7583 vram_peak=1712MB fwd=16008ms bwd=43261ms
+[E1 B100] loss=1.9245 vram_peak=1716MB fwd=12975ms bwd=34699ms
+[E1 B110] loss=1.0860 vram_peak=1720MB fwd=19597ms bwd=36031ms
+[E1 B120] loss=1.3572 vram_peak=1738MB fwd=13440ms bwd=35006ms
+[E1 B130] loss=1.2783 vram_peak=1747MB fwd=13480ms bwd=38279ms
+[E1 B140] loss=1.1911 vram_peak=1772MB fwd=9610ms bwd=31702ms
+[E1 B150] loss=1.6394 vram_peak=1795MB fwd=9881ms bwd=34703ms
+[E1 B160] loss=1.2513 vram_peak=1807MB fwd=21283ms bwd=36306ms
+[E1 B170] loss=1.5458 vram_peak=1830MB fwd=15903ms bwd=35033ms
+[E1 B180] loss=1.4855 vram_peak=1862MB fwd=17752ms bwd=46388ms
+[E1 B190] loss=1.0554 vram_peak=1878MB fwd=11897ms bwd=39283ms
+[E1 B200] loss=0.8723 vram_peak=1904MB fwd=24198ms bwd=47681ms
+[E1 B210] loss=1.3865 vram_peak=1920MB fwd=17934ms bwd=38600ms
+[E1 B220] loss=1.0486 vram_peak=1942MB fwd=14927ms bwd=54938ms
+[E1 B230] loss=1.4669 vram_peak=1964MB fwd=17515ms bwd=55801ms
+[E1 B240] loss=1.3048 vram_peak=1995MB fwd=15532ms bwd=54987ms
+[E1 B250] loss=1.3784 vram_peak=2049MB fwd=21918ms bwd=48419ms
+[E1 B260] loss=1.9050 vram_peak=2116MB fwd=22554ms bwd=55230ms
+[E1 B270] loss=1.7211 vram_peak=2361MB fwd=31931ms bwd=84191ms
+[S³] after eval ...
+       after: {'eval_loss': 1.7054, 'perplexity': 5.5036, 'n_batches': 8}
+
+================================================================
+# S³ Training Report
+
+_generated 2026-07-15T08:15:02.405504+00:00_
+
+## Headline
+
+- **Model**: Qwen/Qwen2.5-7B-Instruct
+- **GPU**: NVIDIA GeForce GTX 1050 (3.94 GB)
+- **Trainable params**: 3,896,452 (0.0511% of 7,619,512,964)
+- **VRAM peak**: 2232.8 MB
+- **Throughput**: 4.85 tok/s
+- **Total wall-clock**: 255.84 min
+
+## Quality (RQ2 gate — did it learn?)
+
+| metric | base (init) | after | Δ |
+|---|---|---|---|
+| eval_loss | 2.48164 | 1.7054 | -0.7762 |
+| perplexity | 11.9609 | 5.5036 | -6.4573 |
+
+## Training dynamics
+
+- optimizer steps: 275
+- loss: first 5.0325 → last 1.5311 (min 0.8188)
+- fp16 steps skipped by GradScaler (overflow warmup): 0
+- mean grad_svmo: 0.06999
+- mean grad_nmf: 0.6025
+- mean grad_stb: 0.1015
+
+## Memory (RQ1)
+
+- VRAM allocated: peak 2233 MB, median 930 MB
+- CPU RAM: peak 13613 MB
+- samples: 114766 @ ~100ms
+
+## Provenance & config
+
+```json
+{
+  "versions": {
+    "torch": "2.5.1+cu121",
+    "transformers": "5.13.0",
+    "accelerate": "1.14.0",
+    "safetensors": "0.8.0",
+    "bitsandbytes": "0.49.2",
+    "datasets": "5.0.0",
+    "numpy": "2.5.0"
+  },
+  "hardware": {
+    "gpu": {
+      "name": "NVIDIA GeForce GTX 1050",
+      "total_vram_gb": 3.94,
+      "driver_cuda": "12.1"
+    },
+    "cpu_count": 8,
+    "ram_total_gb": 15.5,
+    "platform": "Linux-6.18.7-76061807-generic-x86_64-with-glibc2.39"
+  },
+  "params": {
+    "total": 7619512964,
+    "trainable": 3896452,
+    "trainable_pct": 0.0511,
+    "by_component": {
+      "svmo": 225988,
+      "nmf": 3211712,
+      "stb": 3670464
+    }
+  },
+  "git": "f970a614a37c3c27a390323cfedce21ec51d5264"
+}
+```
+
+## Figures
+
+### loss_curve.png
+![loss_curve.png](figures/loss_curve.png)
+
+### lr.png
+![lr.png](figures/lr.png)
+
+### grad_norms.png
+![grad_norms.png](figures/grad_norms.png)
+
+### step_time.png
+![step_time.png](figures/step_time.png)
+
+### vram_trace.png
+![vram_trace.png](figures/vram_trace.png)
+
+### layer_grads.png
+![layer_grads.png](figures/layer_grads.png)
+
+### modulation.png
+![modulation.png](figures/modulation.png)
+
+## Raw data (regenerate any plot)
+
+- `steps.csv`
+- `vram_trace.csv`
+- `layer_grads.csv`
+- `modulation.csv`
+- `provenance.json`
+- `summary.json`
+
+## Still needed for the paper (not auto-collected here)
+
+- Downstream benchmarks: MMLU / HellaSwag / ARC / GSM8K / AlpacaEval (need datasets cached; run `make evaluate`).
+- Baselines: LoRA r=8/r=64, QLoRA, full-FT (same seeds/eval).
+- Ablations: −STB / −NMF / −SVMO and single-operator runs.
+- n≥3 seeds → mean ± std / 95% CI.
+================================================================
+[S³] full report + data: ./results/run_20260714_225107
+[S³] done.

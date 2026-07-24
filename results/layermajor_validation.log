@@ -1,0 +1,12 @@
+/home/gula/Documentos/Proyectos Github/lowrank-field-adapters/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[S3Trainer] trainable=3,896,452 / 7,619,512,964 (0.0511%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: NFR(N:2->4), SBS, SGC(inherent)
+BATCH-MAJOR :  457.5s / 16 ejemplos =  28.6s/ej | VRAM 2524MB
+[S3Trainer] trainable=3,896,452 / 7,619,512,964 (0.0511%)  layer_swap=False  grad_ckpt=True
+[S3Trainer] S3-OPT active: NFR(N:2->4), SBS, SGC(inherent)
+LAYER-MAJOR :  327.4s / 16 ejemplos =  20.5s/ej | VRAM 2219MB
+
+SPEEDUP: 1.40x   (I/O esperado /4)
+THM 4 en 7B REAL: params=1400 max|dgrad|=1.132e+02 (rel 1.58e-01)
+VALIDATION_DONE

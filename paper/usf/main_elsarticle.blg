@@ -1,0 +1,63 @@
+This is BibTeX, Version 0.99d (TeX Live 2023/Debian)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: main_elsarticle.aux
+The style file: elsarticle-num.bst
+Database file #1: refs.bib
+Warning--empty pages in hu2022lora
+Warning--empty pages in houlsby2019adapters
+Warning--empty pages in lester2021prompt
+Warning--empty pages in dettmers2023qlora
+Warning--empty pages in dettmers2022int8
+Warning--empty pages in rajbhandari2021zeroinfinity
+Warning--empty pages in liu2024dora
+Warning--empty pages in rajbhandari2020zero
+Warning--empty pages in ren2021zerooffload
+Warning--empty pages in dao2022flashattention
+Warning--empty pages in huang2019gpipe
+Warning--empty pages in jia2019beyond
+Warning--empty pages in wolf2020transformers
+Warning--empty pages in loshchilov2019adamw
+Warning--empty pages in micikevicius2018mixed
+Warning--empty pages in paszke2019pytorch
+You've used 29 entries,
+            2952 wiz_defined-function locations,
+            797 strings with 11103 characters,
+and the built_in function-call counts, 8269 in all, are:
+= -- 578
+> -- 466
+< -- 2
++ -- 174
+- -- 145
+* -- 522
+:= -- 1192
+add.period$ -- 29
+call.type$ -- 29
+change.case$ -- 31
+chr.to.int$ -- 6
+cite$ -- 45
+duplicate$ -- 280
+empty$ -- 1026
+format.name$ -- 171
+if$ -- 2156
+int.to.chr$ -- 0
+int.to.str$ -- 29
+missing$ -- 27
+newline$ -- 95
+num.names$ -- 28
+pop$ -- 267
+preamble$ -- 1
+purify$ -- 0
+quote$ -- 0
+skip$ -- 573
+stack$ -- 0
+substring$ -- 60
+swap$ -- 15
+text.length$ -- 0
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 0
+warning$ -- 16
+while$ -- 35
+width$ -- 31
+write$ -- 240
+(There were 16 warnings)

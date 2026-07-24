@@ -117,10 +117,12 @@ class S3Trainer:
         # trainable adapter params live permanently on GPU
         self.trainable: List[nn.Parameter] = [p for p in model.parameters() if p.requires_grad]
 
+        # A "base" (no-adapter) model has no trainable params — valid for
+        # eval-only use (forward_layer_major/eval_loss), just not for training.
         self.opt = torch.optim.AdamW(
             self.trainable, lr=config.learning_rate,
             betas=config.betas, weight_decay=config.weight_decay,
-        )
+        ) if self.trainable else None
         # lower init scale -> fewer skipped "warmup" steps at the start of fp16 training
         self.scaler = torch.amp.GradScaler(
             "cuda", enabled=config.amp and self._is_cuda,
@@ -392,13 +394,74 @@ class S3Trainer:
     def amp_dtype_or(self, fallback):
         return self.cfg.amp_dtype if (self.cfg.amp and self._is_cuda) else fallback
 
+    @torch.no_grad()
+    def forward_layer_major(self, batches):
+        """Forward-only with the loops INVERTED — Thm 4 applied to inference.
+
+        `eval_loss` reads all Σ|W_i| bytes to serve ONE batch. Here a unit is
+        loaded once and every batch is pushed through it, so a whole evaluation
+        costs a single model read instead of one per batch. There is no backward,
+        so unlike `step_layer_major` nothing needs saving for recomputation: the
+        only resident state is one hidden tensor per batch, offloaded per Cor 2.1.
+
+        STB is applied deterministically (as in `eval_loss`), never sampled — an
+        evaluation must be a function of the input, not of the RNG.
+
+        Returns the post-norm hidden states (CPU) and labels, one per batch; the
+        caller projects through lm_head, which stays off this loop because the
+        vocab matrix dwarfs a decoder layer.
+        """
+        G = len(batches)
+        emb_dev = self.embed.weight.device
+        ac = dict(device_type="cuda", enabled=self.cfg.amp and self._is_cuda,
+                  dtype=self.cfg.amp_dtype)
+
+        H, labels, masks, pos_embs = [], [], [], []
+        with torch.amp.autocast(**ac):
+            for b in batches:
+                inp, lab, mask = self._prep(b, self.amp_dtype_or(torch.float32))
+                h = self.embed(inp.to(emb_dev)).to(self.device)
+                S = inp.shape[1]
+                pe = self.rotary(h, torch.arange(S, device=self.device).unsqueeze(0))
+                H.append(self._ckpt_store(h)); labels.append(lab)
+                masks.append(mask.to(h.dtype)); pos_embs.append(pe)
+
+            segs = self._segments()
+            for si, seg in enumerate(segs):
+                i, unit, _kind = seg
+                blk = self.blocks[i]
+                self._load(blk, i, unit)
+                if si + 1 < len(segs):
+                    nxt = segs[si + 1]
+                    self._prefetch(nxt[0], nxt[1])
+                for j in range(G):
+                    h = self._ckpt_load(H[j])
+                    h = self._run_seg(seg, h, masks[j], pos_embs[j], True)
+                    H[j] = self._ckpt_store(h)
+                self._unload(blk, i, unit)
+
+            for j in range(G):
+                H[j] = self._ckpt_store(self.norm(self._ckpt_load(H[j])))
+        return H, labels
+
     # ---- USF layer-major (formalismo_streaming.md §6, Thm 4) -----------------
     def _ckpt_store(self, t):
-        """Cor. 2.1: checkpoints live on CPU so VRAM stays independent of depth."""
-        return t.to("cpu", non_blocking=True) if self.cfg.ckpt_offload else t
+        """Cor. 2.1: checkpoints live on CPU so VRAM stays independent of depth.
+
+        Synchronous on purpose. `non_blocking=True` only overlaps with the host
+        when the OTHER side of the copy is pinned memory, which this is not; the
+        streamer's own weight loads run on a side CUDA stream to overlap disk I/O
+        with compute (Prop. 5), and an async copy of `t` here has no ordering
+        guarantee against that side stream. Measured effect: with non_blocking,
+        the loaded tensor could be read before its data landed, producing
+        exactly-zero hidden states (caught by comparing against `eval_loss` on
+        the real 7B model). 28 small synchronous copies per forward is immeasurable
+        next to the weight I/O this method exists to amortize.
+        """
+        return t.to("cpu") if self.cfg.ckpt_offload else t
 
     def _ckpt_load(self, t):
-        return t.to(self.device, non_blocking=True) if self.cfg.ckpt_offload else t
+        return t.to(self.device) if self.cfg.ckpt_offload else t
 
     def step_layer_major(self, batches) -> float:
         """One optimizer step over G micro-batches with the loops INVERTED

@@ -1,0 +1,65 @@
+{
+  "timestamp_utc": "2026-07-18T17:27:06.850704+00:00",
+  "git_commit": "d1be1682af63e6e461496f01cb1f4c24c32568fb",
+  "hardware": {
+    "gpu": {
+      "name": "NVIDIA GeForce GTX 1050",
+      "total_vram_gb": 3.94,
+      "driver_cuda": "12.1"
+    },
+    "cpu_count": 8,
+    "ram_total_gb": 15.5,
+    "platform": "Linux-6.18.7-76061807-generic-x86_64-with-glibc2.39"
+  },
+  "versions": {
+    "torch": "2.5.1+cu121",
+    "transformers": "5.13.0",
+    "accelerate": "1.14.0",
+    "safetensors": "0.8.0",
+    "bitsandbytes": "0.49.2",
+    "datasets": "5.0.0",
+    "numpy": "2.5.0"
+  },
+  "python": "3.12.3",
+  "train_config": {
+    "learning_rate": 0.001,
+    "weight_decay": 0.01,
+    "betas": [
+      0.9,
+      0.999
+    ],
+    "max_epochs": 1,
+    "warmup_ratio": 0.05,
+    "max_grad_norm": 1.0,
+    "grad_accum_steps": 2,
+    "gradient_checkpointing": true,
+    "layer_swap": false,
+    "amp": true,
+    "amp_dtype": "torch.float16",
+    "log_interval": 10,
+    "layer_major": false,
+    "ckpt_offload": true,
+    "use_nfr": false,
+    "nfr_initial_N": 2,
+    "nfr_full_N": 4,
+    "use_sbs": true,
+    "use_sgc": true,
+    "extra_opts": []
+  },
+  "params": {
+    "total": 7616928452,
+    "trainable": 1311940,
+    "trainable_pct": 0.0172,
+    "by_component": {
+      "svmo": 853188,
+      "nmf": 0,
+      "stb": 458752,
+      "lora": 0
+    }
+  },
+  "dataset": {
+    "name": "tatsu-lab/alpaca",
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "ablation": "no_nmf_h64"
+  }
+}
