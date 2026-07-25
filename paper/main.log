@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.7.5)  24 JUL 2026 20:56
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.7.5)  24 JUL 2026 21:44
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -893,118 +893,117 @@ Underfull \hbox (badness 3514) in paragraph at lines 107--108
 sy/m/n/10 ^^Y \OT1/cmr/m/n/10 1[]760$ \T1/ptm/m/n/10 and
  []
 
-[2]
 LaTeX Font Info:    Trying to load font information for T1+pcr on input line 12
-9.
- (/usr/share/texlive/texmf-dist/tex/latex/psnfss/t1pcr.fd
+7.
+(/usr/share/texlive/texmf-dist/tex/latex/psnfss/t1pcr.fd
 File: t1pcr.fd 2001/06/04 font definitions for T1/pcr.
 )
 LaTeX Font Info:    Font shape `T1/pcr/m/it' in size <10> not available
-(Font)              Font shape `T1/pcr/m/sl' tried instead on input line 129.
+(Font)              Font shape `T1/pcr/m/sl' tried instead on input line 127.
 
-Underfull \hbox (badness 2020) in paragraph at lines 129--130
+Underfull \hbox (badness 2020) in paragraph at lines 127--128
 \T1/ptm/m/it/10 tions for-mat-ted as real ref-er-ences would read as fab-
  []
 
 
-Underfull \hbox (badness 2582) in paragraph at lines 129--130
+Underfull \hbox (badness 2582) in paragraph at lines 127--128
 \T1/ptm/m/it/10 ri-cated, so they were re-moved. A real lit-er-a-ture pass
  []
 
-
-Underfull \hbox (badness 1917) in paragraph at lines 135--136
+[2]
+Underfull \hbox (badness 1917) in paragraph at lines 133--134
 []\T1/ptm/m/n/10 Neural ODEs [[]] in-tro-duced continuous-depth mod-els
  []
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\mathsurround' on input line 144.
+(hyperref)                removing `\mathsurround' on input line 142.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\z@' on input line 144.
+(hyperref)                removing `\z@' on input line 142.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `superscript' on input line 144.
+(hyperref)                removing `superscript' on input line 142.
 
 
 LaTeX Font Warning: Font shape `T1/ptm/m/scit' undefined
-(Font)              using `T1/ptm/m/sc' instead on input line 149.
+(Font)              using `T1/ptm/m/sc' instead on input line 147.
 
 
-Underfull \hbox (badness 1418) in paragraph at lines 191--192
+Underfull \hbox (badness 1418) in paragraph at lines 189--190
 \T1/ptm/m/n/10 case ap-prox-i-ma-tion con-stant re-mains within a fac-tor of
  []
 
 [3] [4]
 
 LaTeX Font Warning: Font shape `T1/ptm/m/scit' undefined
-(Font)              using `T1/ptm/m/sc' instead on input line 312.
+(Font)              using `T1/ptm/m/sc' instead on input line 310.
 
 [5] [6]
 
 LaTeX Font Warning: Font shape `T1/ptm/m/scit' undefined
-(Font)              using `T1/ptm/m/sc' instead on input line 479.
+(Font)              using `T1/ptm/m/sc' instead on input line 477.
 
 
-Underfull \hbox (badness 3838) in paragraph at lines 484--485
+Underfull \hbox (badness 3838) in paragraph at lines 482--483
  \T1/ptm/m/it/10 1) The Core Prob-lem: Cou-pling Dis-joint Adap-ta-tion
  []
 
 
 LaTeX Font Warning: Font shape `T1/ptm/m/scit' undefined
-(Font)              using `T1/ptm/m/sc' instead on input line 493.
+(Font)              using `T1/ptm/m/sc' instead on input line 491.
 
 
-Underfull \hbox (badness 1748) in paragraph at lines 506--507
+Underfull \hbox (badness 1748) in paragraph at lines 504--505
 \T1/ptm/m/n/10 flows through STB, link-ing NMF-induced rep-re-sen-ta-tion
  []
 
 [7]
-Underfull \hbox (badness 2894) in paragraph at lines 589--593
+Underfull \hbox (badness 2894) in paragraph at lines 587--591
 []\T1/ptm/m/n/10 The cross-term $\OML/cmm/m/it/10 H[]$ \T1/ptm/m/n/10 arises fr
 om dif-fer-en-ti-at-ing
  []
 
 
-Underfull \hbox (badness 1874) in paragraph at lines 589--593
+Underfull \hbox (badness 1874) in paragraph at lines 587--591
 \T1/ptm/m/n/10 the STB for-ward chain: $\OML/cmm/m/it/10 @[]\OMS/cmsy/m/n/10 L\
 OML/cmm/m/it/10 =@^^R[]@^^R[] \OT1/cmr/m/n/10 = \OML/cmm/m/it/10 @\OMS/cmsy/m/n
 /10 L\OML/cmm/m/it/10 =@h[] \OMS/cmsy/m/n/10 ^^A
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 594--595
+Underfull \hbox (badness 10000) in paragraph at lines 592--593
 []\T1/ptm/m/n/10 Consider the Schur com-ple-ment $\OML/cmm/m/it/10 S \OT1/cmr/m
 /n/10 = \OML/cmm/m/it/10 H[] \OMS/cmsy/m/n/10 ^^@
  []
 
 
-Underfull \hbox (badness 4416) in paragraph at lines 598--600
+Underfull \hbox (badness 4416) in paragraph at lines 596--598
 \T1/ptm/m/n/10 Bounding $\OMS/cmsy/m/n/10 k\OML/cmm/m/it/10 H[]\OMS/cmsy/m/n/10
  k[] ^^T []$ \T1/ptm/m/n/10 and us-ing
  []
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\mathsurround' on input line 604.
+(hyperref)                removing `\mathsurround' on input line 602.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\z@' on input line 604.
+(hyperref)                removing `\z@' on input line 602.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `superscript' on input line 604.
+(hyperref)                removing `superscript' on input line 602.
 
-[8]
-Underfull \hbox (badness 6708) in paragraph at lines 618--619
+
+Underfull \hbox (badness 6708) in paragraph at lines 616--617
 []\T1/ptm/m/n/10 SVMO mod-u-lates 7 pro-jec-tion ma-tri-ces per block
  []
 
-
-Underfull \hbox (badness 1603) in paragraph at lines 682--683
+[8]
+Underfull \hbox (badness 1603) in paragraph at lines 680--681
  \T1/ptm/m/it/10 3) VRAM Peak: Con-crete Anal-y-sis: [][][] \T1/ptm/m/n/10 Trai
 n-ing em-ploys
  []
@@ -1014,37 +1013,37 @@ pdfTeX warning (ext4): destination with the same identifier (name{figure.1}) ha
 s been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.727 \begin{equation}
-                      
+l.739 \end{align}
+                 
 pdfTeX warning (ext4): destination with the same identifier (name{table.1}) has
  been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.727 \begin{equation}
-                      
+l.739 \end{align}
+                 
 pdfTeX warning (ext4): destination with the same identifier (name{table.2}) has
  been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.727 \begin{equation}
-                      ] [10]
-Underfull \hbox (badness 4303) in paragraph at lines 816--817
+l.739 \end{align}
+                 ] [10]
+Underfull \hbox (badness 4303) in paragraph at lines 814--815
 []\T1/ptm/m/n/10 All re-sults in this sec-tion are mea-sured, not pro-
  []
 
 
-Underfull \hbox (badness 1406) in paragraph at lines 816--817
+Underfull \hbox (badness 1406) in paragraph at lines 814--815
 \T1/ptm/m/n/10 jected: ev-ery num-ber comes from a run on real hard-
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 826--827
+Underfull \hbox (badness 10000) in paragraph at lines 824--825
 []\T1/ptm/b/n/10 Evaluation bench-marks. \T1/ptm/m/n/10 Seven zero-shot multipl
 e-
  []
 
 
-Underfull \hbox (badness 1917) in paragraph at lines 826--827
+Underfull \hbox (badness 1917) in paragraph at lines 824--825
 \T1/ptm/m/n/10 choice/boolean tasks from \T1/pcr/m/n/10 lm-eval-harness\T1/ptm/
 m/n/10 : BoolQ,
  []
@@ -1054,50 +1053,52 @@ pdfTeX warning (ext4): destination with the same identifier (name{table.3}) has
  been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.883 
-      
+l.905 ...matched low budget, spectral beats flow.}
+                                                   SVMO+STB (685K params, ro...
+
 pdfTeX warning (ext4): destination with the same identifier (name{table.4}) has
  been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.883 
-      ]
+l.905 ...matched low budget, spectral beats flow.}
+                                                   SVMO+STB (685K params, ro...
+]
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\mathsurround' on input line 944.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\z@' on input line 944.
+(hyperref)                removing `\mathsurround' on input line 942.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `superscript' on input line 944.
+(hyperref)                removing `\z@' on input line 942.
 
 
-Underfull \hbox (badness 3482) in paragraph at lines 948--949
-[]\T1/ptm/b/n/10 2. Con-tin-u-ous de-for-ma-tion (\T1/ptm/b/sc/10 NMF\T1/ptm/b/
-n/10 ). \T1/ptm/m/n/10 Dis-crete MLP
- []
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `superscript' on input line 942.
 
-[12]
-Underfull \hbox (badness 3199) in paragraph at lines 971--972
-[]\T1/ptm/m/n/10 We in-tro-duced S$[]$ (Spectral-Spatial-Smooth), a PEFT
- []
-
-[13
+[12
 pdfTeX warning (ext4): destination with the same identifier (name{table.5}) has
  been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.974 
+l.945 
       
 pdfTeX warning (ext4): destination with the same identifier (name{table.6}) has
  been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.974 
+l.945 
       ]
+Underfull \hbox (badness 3482) in paragraph at lines 946--947
+[]\T1/ptm/b/n/10 2. Con-tin-u-ous de-for-ma-tion (\T1/ptm/b/sc/10 NMF\T1/ptm/b/
+n/10 ). \T1/ptm/m/n/10 Dis-crete MLP
+ []
+
+
+Underfull \hbox (badness 3199) in paragraph at lines 969--970
+[]\T1/ptm/m/n/10 We in-tro-duced S$[]$ (Spectral-Spatial-Smooth), a PEFT
+ []
+
+[13]
 
 ** Conference Paper **
 Before submitting the final camera ready copy, remember to:
@@ -1120,7 +1121,7 @@ Package rerunfilecheck Info: File `main.out' has not changed.
 Here is how much of TeX's memory you used:
  25615 strings out of 474222
  478763 string characters out of 5748734
- 1957975 words of memory out of 5000000
+ 1959975 words of memory out of 5000000
  47253 multiletter control sequences out of 15000+600000
  725607 words of font info for 215 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
@@ -1150,10 +1151,10 @@ usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/share/texli
 ve/texmf-dist/fonts/type1/urw/times/utmbi8a.pfb></usr/share/texlive/texmf-dist/
 fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw
 /times/utmri8a.pfb>
-Output written on main.pdf (14 pages, 449143 bytes).
+Output written on main.pdf (14 pages, 449393 bytes).
 PDF statistics:
- 661 PDF objects out of 1000 (max. 8388607)
- 585 compressed objects within 6 object streams
+ 663 PDF objects out of 1000 (max. 8388607)
+ 587 compressed objects within 6 object streams
  184 named destinations out of 1000 (max. 500000)
  373 words of extra memory for PDF output out of 10000 (max. 10000000)
 

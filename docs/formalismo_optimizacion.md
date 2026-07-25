@@ -1561,20 +1561,20 @@ Durante **fase tardía** ($t > t_{crit}$): $\kappa_t$ crece porque la Hessiana d
 
 ### 8.2.4 Teorema 8.2.4: Comparación Formal con Xavier y Kaiming
 
-**Teorema 8.2.4 (Xavier vs HFISC vs Kaiming).**
-Sea $m_\theta$ el MLP de modulación con pesos inicializados segón Xavier, HFISC-2, o Kaiming. El número de condición resultante de la Hessiana $H_{m_\theta}$ satisface:
+*Corrección (2026-07-20).* La versión anterior asignaba números de condición *distintos* a HFISC-2 y Kaiming ($1+1/d$ vs. $1+2/d$) pese a inicializar con la **misma** varianza por entrada, $2/d$ (línea "$W_i^{(0)}\sim\sqrt{2/d}\cdot U$" para HFISC-2 vs. "$W_i\sim\mathcal N(0,2/d)$" para Kaiming) — dos derivaciones distintas aplicadas a la misma distribución no pueden dar resultados distintos; una de las dos cuentas está mal. Además, la fórmula usada para Xavier ($\text{Var}(W_2W_1)=d\cdot\sigma^4$, dando $1/d$ con $\sigma^2=1/d$) no es la misma que la usada en el Teorema 8.2.2 para HFISC ($\text{Var}(W_2W_1)\approx2/\sqrt{d_{in}d_{out}}$), así que el "$2/d$" de HFISC-2 y el "$4/d$" de Kaiming no son comparables con el "$1/d$" de Xavier — se mezclaron dos fórmulas distintas para el mismo tipo de cantidad. Aquí se usa una única fórmula (conteo directo de varianza entrywise de un producto de matrices aleatorias) de forma consistente para las tres.
 
-$$\kappa_{Xavier} \approx 1 + \frac{1}{2d}, \quad \kappa_{HFISC} \approx 1 + \frac{1}{d}, \quad \kappa_{Kaiming} \approx 1 + \frac{2}{d}$$
+**Teorema 8.2.4 (Xavier vs HFISC vs Kaiming, corregido).**
+Sea $m_\theta$ el MLP de modulación con pesos $W_1^{(0)}, W_2^{(0)} \in \mathbb{R}^{d\times d}$, entradas i.i.d. con varianza $\sigma^2$ (aproximación válida también para $U,V$ cuasi-ortogonales vía QR, cuyas entradas tienen varianza $\approx 1/d$ antes de reescalar). Para $(W_2W_1)_{ij} = \sum_{k=1}^d (W_2)_{ik}(W_1)_{kj}$, cada sumando tiene varianza $\sigma^4$ (producto de dos variables independientes de media cero), así que por independencia entre los $d$ sumandos:
 
-*Demostración.* Para Xavier: $W_i \sim \mathcal{N}(0, 1/d)$, entonces $\text{Var}(W_1^{(0)} W_2^{(0)}) = 1/d$. La deviación de identidad $\|W_2^{(0)} W_1^{(0)} - I\|$ tiene norma $\sim 1/\sqrt{d}$ (porque cada entrada de $W_2^{(0)} W_1^{(0)} - I$ tiene varianza $1/d$). Por lo tanto $\kappa \approx 1 + O(1/d)$.
+$$\text{Var}\big((W_2^{(0)}W_1^{(0)})_{ij}\big) = d\sigma^4$$
 
-Para HFISC-2: $W_i^{(0)} \sim \sqrt{2/d} \cdot U$ con $U$ ortogonal, entonces $\text{Var}(W_2^{(0)} W_1^{(0)}) = 2/d$. La deviación $\|W_2^{(0)} W_1^{(0)} - I\|$ tiene norma $\sim \sqrt{2/d}$. Esto es PEOR que Xavier para la norma del Jacobiano, pero el objetivo de HFISC es que el Jacobiano sea cercano a identidad, no que la deviación sea mínima. HFISC escala por $\sqrt{2}$ para compensar que GELU no es exactamente lineal cerca de zero (a diferencia de lo que asume Xavier para sigmoid/tanh). La escala $\sqrt{2}$ emerge naturalmente de que $\text{sech}^2(0) = 1$ en la derivada de GELU.
+Con $\kappa \approx 1 + O(\|W_2W_1 - I\|) = 1 + O(\sqrt{d}\cdot\sigma^2)$ (norma de una matriz $d\times d$ con entradas i.i.d. de varianza $d\sigma^4$ escala como $\sqrt{d}\cdot\sqrt{d\sigma^4}/\sqrt{d}=\sqrt{d}\sigma^2$, tomando la norma de Frobenius normalizada por entrada):
 
-Para Kaiming: $W_i \sim \mathcal{N}(0, 2/d)$, entonces $\text{Var}(W_2^{(0)} W_1^{(0)}) = 4/d$. La deviación $\|W_2^{(0)} W_1^{(0)} - I\| \sim 2/\sqrt{d}$, giving $\kappa \approx 1 + 2/d$.
+$$\text{Xavier } (\sigma^2=1/d):\ \kappa \approx 1+O(1/\sqrt{d}\,/\sqrt d) = 1+O(1/d) \qquad \text{HFISC-2, Kaiming } (\sigma^2=2/d):\ \kappa \approx 1+O(2/d)$$
 
-HFISC usa la escala óptima para GELU: $\sqrt{2/d}$, que minimiza $\|W_2 W_1 - I\|$ subject a que $\mathbb{E}[(W_2 W_1)_{ii}] = 1$ (para mantener el Jacobiano unbiased). $\blacksquare$
+**Conclusión honesta:** a este orden de aproximación, **HFISC-2 y Kaiming son indistinguibles** — usan la misma varianza por entrada ($2/d$) y por lo tanto producen la misma estimación de $\kappa$. La separación cuantitativa "$1+1/d$ vs. $1+2/d$" de la versión anterior no se sostiene; era un artefacto de aplicar fórmulas distintas a cantidades que deberían tratarse igual. Esto coincide con lo que ya se sospechaba: para $d$ grande, $O(1/d)$ y $O(2/d)$ no se pueden separar con este argumento — hace falta un experimento (medir $\kappa$ empíricamente en $d=4096$) o un argumento no-asintótico, ninguno de los cuales existe todavía en este documento. $\blacksquare$
 
-*Remark 8.2.4 (Recomendación).* Para el MLP de modulación con GELU, la inicialización óptima es HFISC-2 con escala $\sqrt{2/d}$. Xavier ($\sqrt{1/d}$) subestima la escala para GELU; Kaiming ($\sqrt{2/d}$) coincide con HFISC porque Kaiming fue diseñado para ReLU (que tiene derivadas 0 o 1) y GELU tiene derivadas similares cerca de zero. Para nuestro caso específico donde queremos $W_2 W_1 \approx I$ (Jacobiano cercano a identidad), HFISC-2 y Kaiming son equivalent.
+*Remark 8.2.4 (Recomendación, honesta).* Lo único que este argumento de varianza entrywise realmente distingue es Xavier ($\sigma^2=1/d$, factor $O(1/d)$) de HFISC-2/Kaiming ($\sigma^2=2/d$, factor $O(2/d)$) — y a ese nivel, HFISC-2 *empeora* el condicionamiento estimado respecto a Xavier, no lo mejora. La justificación real de usar $\sqrt{2/d}$ en vez de $\sqrt{1/d}$ no viene de esta cuenta de condición: viene de que GELU no es lineal cerca de cero (a diferencia de lo que Xavier asume para sigmoid/tanh) y necesita el factor $\sqrt2$ para preservar la varianza de activación hacia adelante — la misma razón por la que Kaiming introdujo ese factor para ReLU. La distinción práctica entre HFISC-2 (basado en $U,V$ ortogonales) y Kaiming (i.i.d. Gaussiano) no está en la escala $\sigma^2$, que es idéntica, sino en la estructura de segundo orden (ortogonalidad exacta vs. aproximada) — un efecto que este argumento entrywise no puede capturar y que requeriría un análisis distinto, no incluido aquí.
 
 ### 8.3 Token-wise ODE Warmstarting (TOWS)
 
@@ -1709,6 +1709,16 @@ El segundo término es $O(\max_s \Delta \mathcal{L}_s / \mu)$ cuando $\Delta \ma
 
 *Remark 8.5 (Interpretación).* El teorema dice que si la diferencia de gradiente $\|\nabla \mathcal{L}(\theta_t^{k(t)}) - \nabla \mathcal{L}(\theta_t^{k_{max})}\|$ permanece acotada, la solución con $k$ variable converge a una vecindad de $\theta^*$ cuyo radio es proporcional a este bound. Para que el radio sea pequeño (e.g., $< 0.01$), necesitamos $\Delta \mathcal{L}_s$ pequeño, lo cual se satisface si los valores singulares descartados son efectivamente pequeños ($\sum_{i > k(t)} \sigma_i^2 \approx 0$).
 
+**Extensión (2026-07-20): cota explícita de $\Delta\mathcal{L}_s$ en términos de $\sigma_{k(t)+1}$.** El teorema anterior deja $\Delta\mathcal{L}_s$ como una cantidad abstracta sin conectarla al mecanismo real de DRA (qué valores singulares se descartan). Se cierra esa brecha con el siguiente lema, que reutiliza la misma identidad de truncación SVD ya probada en el Teorema SMA-1 (§8.1):
+
+**Lema DRA-2.1.** Si la loss es $L_g$-Lipschitz respecto a la matriz de pesos reconstruida (i.e., $\|\nabla_\theta\mathcal{L}(\tilde W) - \nabla_\theta\mathcal{L}(\tilde W')\| \leq L_g\|\tilde W - \tilde W'\|_F$ para reconstrucciones cercanas — una hipótesis de suavidad adicional, no gratuita, pero razonable dado que ya se asume $L$-smoothness de $\mathcal{L}$ en el Teorema DRA-2), entonces:
+
+$$\Delta\mathcal{L}_s \leq L_g \cdot \|\tilde{W}_{k(s)} - \tilde{W}_{k_{max}}\|_F = L_g\sqrt{\sum_{j=k(s)+1}^{k_{max}} \sigma_j^2(W)}$$
+
+*Demostración.* La primera desigualdad es la hipótesis de Lipschitz. La igualdad es la misma identidad usada en el Teorema SMA-1: $\tilde{W}_{k_{max}} - \tilde{W}_{k(s)} = U_\perp\Sigma_\perp V_\perp^T$ donde $U_\perp,\Sigma_\perp,V_\perp$ cubren los índices $k(s)+1,\ldots,k_{max}$, y $\|U_\perp\Sigma_\perp V_\perp^T\|_F = \|\Sigma_\perp\|_F = \sqrt{\sum_{j=k(s)+1}^{k_{max}}\sigma_j^2}$ por ortonormalidad de $U_\perp, V_\perp$. $\blacksquare$
+
+Sustituyendo en el Teorema DRA-2, el radio de convergencia queda expresado enteramente en términos del espectro de $W$: el segundo término es $O\!\big(\frac{L_g}{\mu}\max_s\sqrt{\sum_{j>k(s)}\sigma_j^2}\big)$, confirmando rigurosamente la intuición de Remark 8.5 en vez de dejarla como afirmación sin probar.
+
 **Teorema DRA-3 (Criterio de Estabilidad de $k$ Online).**
 Sea $\hat{k}_{eff}(t) = \max\{i : \sigma_i(t) > \delta \cdot \sigma_1(t)\}$ el rank efectivo estimado en paso $t$. Definimos la señal de cambio de $k$ como:
 
@@ -1730,13 +1740,17 @@ La fracción de mejora relativa es $\sigma_{k+1}/\|W\| \approx s(t)$. Si $k$ cam
 
 El overhead de DRA sobre SVMO es $O(d \cdot k)$ por paso (calcular $s(t)$), negligible comparado con $O(d \cdot k \cdot d_b)$ del forward pass.
 
+**Nota (2026-07-20) sobre rigor de "estabilidad".** La brecha señalada para DRA-3 es que "$s(t)<\delta$ por $n$ pasos" no tenía una definición formal de qué significa "estable". La definición correcta no es sobre $s(t)$ en sí (una señal ruidosa que puede cruzar $\delta$ en cualquier momento) sino sobre la regla de decisión completa: el par (patience $n_{patience}$, histéresis $\alpha>1$) del Remark 8.6 es un **debounce de dos umbrales** — el criterio de subir $k$ ($s(t)>\delta\alpha$) y el de bajarlo ($s(t)<\delta$) están separados por la banda $(\delta,\delta\alpha)$, así que una sola cruzada de $s(t)$ a través de $\delta$ no puede disparar una oscilación infinita $k\to k-1\to k\to k-1\ldots$: para que eso ocurra, $s(t)$ tendría que cruzar *ambos* umbrales repetidamente, cada vez sostenido por $n_{patience}$ pasos consecutivos — esto es la garantía estándar de anti-chattering de los controladores con histéresis (Schmitt trigger), y es la definición operacional rigurosa de "estabilidad" que faltaba: **no oscilación no acotada**, no "convergencia" en el sentido de las otras pruebas de esta sección.
+
 ---
 
 ## 9. Análisis Integrado de S³-OPT
 
 ### 9.1 Reducción de FLOPs Total
 
-Si aplicamos todas las optimizaciones simultáneamente, el factor de reducción compuesta es:
+**Nota (2026-07-20) — supuesto no verificado.** El producto de abajo asume que las condiciones de activación de cada optimización son estocásticamente independientes entre sí. Eso es falso en al menos un caso conocido: MSO se activa quando la curvatura local $\hat\kappa$ es baja (Teorema MSO-2), y EMP se activa cuando el predictor de eigenvalores tiene alta confianza — ambas condiciones tienden a cumplirse en las mismas regiones "planas" de la trayectoria, no de forma independiente. Si dos optimizaciones se activan por la misma señal subyacente, multiplicar sus factores de reducción **cuenta el mismo ahorro dos veces** y sobreestima $\rho_{total}$ (subestima el costo real). Sin una medición conjunta de cuándo se solapan las condiciones de activación, la fórmula de abajo debe leerse como una **cota optimista** (mejor caso bajo independencia), no como una predicción, y no hay en este documento un teorema de composición que la reemplace — es exactamente el gap que señala la tabla de pendientes.
+
+Si aplicamos todas las optimizaciones simultáneamente asumiendo independencia (no verificada), el factor de reducción compuesta sería:
 
 $$\rho_{total} = \rho_{SMV} \cdot \rho_{EMP} \cdot \rho_{TER} \cdot \rho_{MSO} \cdot (1 - p_{skip}) \cdot \rho_{DRA}$$
 
