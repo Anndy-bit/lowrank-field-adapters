@@ -20,6 +20,8 @@
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 \usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
 
 \newtheorem{theorem}{Theorem}[section]
 \newtheorem{lemma}[theorem]{Lemma}
@@ -617,13 +619,38 @@ SVMO modulates 7 projection matrices per block ($W_Q, W_K, W_V, W_O, W_{\text{up
 
 \begin{figure}[t]
 \centering
-\fbox{\parbox{0.92\linewidth}{
-\vspace{2.5cm}
-\centering
-\textcolor{gray!60}{\large [EXP-FIG: Architecture diagram --- Replace with TikZ or PNG]}
-\vspace{2.5cm}
-}}
-\caption{One \sthree{}-adapted transformer layer. Frozen model components in black; learned S\textsuperscript{3} adapters in blue (STB preconditioning, SVMO-modulated projections, NMF continuous flows).}
+\begin{tikzpicture}[
+    node distance=5pt and 5pt,
+    frozen/.style={rectangle, draw, thick, minimum width=3.1cm, minimum height=0.55cm, align=center, font=\scriptsize},
+    adapter/.style={rectangle, draw, thick, fill=blue!10, draw=blue!60!black, minimum width=3.1cm, minimum height=0.55cm, align=center, font=\scriptsize},
+    sum/.style={circle, draw, thick, minimum size=0.38cm, inner sep=0pt, font=\scriptsize},
+    lbl/.style={font=\scriptsize},
+    arr/.style={-{Latex[length=1.6mm]}, thick}
+]
+    \node[lbl] (hin) {$h_{\text{in}}$};
+    \node[adapter, below=of hin] (stb) {\textcolor{blue!60!black}{STB} --- spectral preconditioning};
+    \node[frozen, below=of stb] (attn) {Attention ($Q,K,V,O$)\\[1pt]\textcolor{blue!60!black}{\scriptsize SVMO-modulated projections}};
+    \node[sum, below=of attn] (sum1) {$+$};
+    \node[adapter, below=of sum1] (nmf1) {\textcolor{blue!60!black}{NMF$_1$} --- flow after attention};
+    \node[frozen, below=of nmf1] (norm) {RMSNorm \scriptsize(frozen)};
+    \node[frozen, below=of norm] (mlp) {MLP (gate/up/down)\\[1pt]\textcolor{blue!60!black}{\scriptsize SVMO-modulated projections}};
+    \node[sum, below=of mlp] (sum2) {$+$};
+    \node[adapter, below=of sum2] (nmf2) {\textcolor{blue!60!black}{NMF$_2$} --- flow after MLP};
+    \node[lbl, below=of nmf2] (hout) {$h_{\text{out}}$};
+
+    \draw[arr] (hin) -- (stb);
+    \draw[arr] (stb) -- (attn);
+    \draw[arr] (attn) -- (sum1);
+    \draw[arr] (sum1) -- (nmf1);
+    \draw[arr] (nmf1) -- (norm);
+    \draw[arr] (norm) -- (mlp);
+    \draw[arr] (mlp) -- (sum2);
+    \draw[arr] (sum2) -- (nmf2);
+    \draw[arr] (nmf2) -- (hout);
+    \draw[arr] (hin.east) -- ++(1.0,0) |- (sum1.east);
+    \draw[arr] (nmf1.east) -- ++(1.0,0) |- (sum2.east);
+\end{tikzpicture}
+\caption{One \sthree{}-adapted transformer layer. Frozen model components in black; learned S\textsuperscript{3} adapters in blue (STB preconditioning, SVMO-modulated projections, NMF continuous flows). Residual connections shown at right.}
 \label{fig:s3arch}
 \end{figure}
 

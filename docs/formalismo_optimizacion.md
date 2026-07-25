@@ -202,14 +202,23 @@ El error máximo por usar $\mu_{\theta_{t_0}}$ en lugar de $\mu_{\theta_{t_0+\de
 
 $$\|\mu_{\theta_{t_0}} - \mu_{\theta_{t_0+\delta}}\| \leq L_\mu \cdot \|\theta_{t_0+\delta} - \theta_{t_0}\|$$
 
-donde $L_\mu$ es la constante de Lipschitz de $\mu_\theta(\cdot)$. Por la dinámica de momentum:
+donde $L_\mu$ es la constante de Lipschitz de $\mu_\theta(\cdot)$, y $G = \max_t \|\nabla \mathcal{L}(\theta_t)\|$.
 
-$$\|\theta_{t_0+\delta} - \theta_{t_0}\| \leq \delta \cdot \eta \sum_{i=0}^{\delta-1} (1+\beta)^i \|\nabla \mathcal{L}(\theta_{t_0+i})\|
-\leq \delta \cdot \eta \cdot \frac{(1+\beta)^\delta - 1}{\beta} \cdot G$$
+*Corrección (2026-07-20).* Una versión anterior de este documento derivaba aquí $\|\theta_{t_0+\delta} - \theta_{t_0}\| \leq \delta\eta\sum_{i=0}^{\delta-1}(1+\beta)^i G$, con un error de signo en la recursión de momentum que hacía crecer el bound geométricamente ($(1.9)^{32}\approx 10^7$ para $\beta=0.9$). Ese resultado era incorrecto y se reemplaza por la derivación siguiente.
 
-con $G = \max_t \|\nabla \mathcal{L}(\theta_t)\|$.
+Definimos la velocidad $v_t = \theta_t - \theta_{t-1}$. La actualización de momentum se reescribe como $v_{t+1} = \beta v_t - \eta \nabla\mathcal{L}(\theta_t)$ (es la forma "heavy-ball" estándar). Con $\|\nabla\mathcal{L}(\theta_t)\| \leq G$ para todo $t$:
 
-*Bound efectivo:* Para $\eta = 10^{-4}, \beta = 0.9, G \approx 1, \delta = 32$ (gradient accumulation steps): $\|\theta_{t_0+\delta} - \theta_{t_0}\| \leq 32 \times 10^{-4} \times \frac{(1.9)^{32}-1}{0.9} \times 1$. $(1.9)^{32}$ es huge (~$10^7$), pero este es el bound peor caso. En la práctica, $\nabla \mathcal{L}$ cambia de dirección y el momentum reduce el drift acumulado. El bound práctico es $\|\theta_{t_0+\delta} - \theta_{t_0}\| \leq \eta \cdot \delta \cdot G / (1-\beta) = 10^{-4} \times 32 \times 1 / 0.1 = 0.032$.
+$$\|v_{t+1}\| \leq \beta \|v_t\| + \eta G$$
+
+Esta es una recursión **contractiva** porque $\beta < 1$ multiplica el término que decrece, no el que crece — la versión anterior del documento invertía este signo y obtenía $(1+\beta)^i$ (crecimiento geométrico) en vez de $\beta^i$ (decaimiento geométrico), de ahí que $(1.9)^{32}$ explote: ese número nunca debió aparecer. Desenrollando la recursión correcta desde $v_0=0$:
+
+$$\|v_t\| \leq \eta G \sum_{i=0}^{t-1}\beta^i \leq \frac{\eta G}{1-\beta}$$
+
+es decir, la velocidad de momentum está acotada por una **constante**, no crece con $t$ — este es el hecho estándar de que el momentum amplifica el learning rate efectivo por un factor $1/(1-\beta)$, no que el drift diverja. El drift total sobre $\delta$ pasos es entonces:
+
+$$\|\theta_{t_0+\delta} - \theta_{t_0}\| = \Big\|\sum_{i=1}^{\delta} v_{t_0+i}\Big\| \leq \sum_{i=1}^{\delta}\|v_{t_0+i}\| \leq \delta \cdot \frac{\eta G}{1-\beta}$$
+
+Este es el bound riguroso, no una fórmula "práctica" separada del worst-case: es el único bound correcto. Para $\eta = 10^{-4}, \beta = 0.9, G \approx 1, \delta = 32$: $\|\theta_{t_0+\delta} - \theta_{t_0}\| \leq 32 \times 10^{-4} \times 1/0.1 = 0.032$.
 
 Con $L_\mu \approx 0.1$ (estimado de la arquitectura tanh): $\|\mu_{t_0} - \mu_{t_0+\delta}\| \leq 0.003$, i.e., 0.3% de cambio en $\mu$. Esto justifica usar $\mu$ constante durante gradient accumulation. $\blacksquare$
 
@@ -359,48 +368,21 @@ Sea $\rho(A) = \max_i |\lambda_i(A)|$ el radio espectral de la matriz de transic
 
 ### 3.4 Teorema EMP-1: Acotación del Error de Predicción
 
-**Teorema EMP-1 (Bound de Error Acumulado).**
-Sea $\mathcal{P}$ un predictor con error un-step acotado $\mathbb{E}\|e_{t+1}\|^2 \leq \delta^2$ para todo $t$. Sea $\rho = \rho(A) < 1$ el radio espectral de la matriz de transición. Asumimos que lasinnovaciones$\delta_t$ son independientes de $e_t$ y tienen covarianza $\mathbb{E}[\delta_t \delta_t^T] \preceq \sigma^2 I$.
+*Corrección (2026-07-20).* La versión anterior de este teorema tenía dos problemas independientes: (i) el enunciado y la demostración terminaban en fórmulas distintas ($\sigma\rho$ vs.\ $2\delta$ como coeficiente del término en $T$ — no coincidían); (ii) Definición 3.2, tal como estaba escrita, hace que $\hat\mu_{t+1}=\mathcal{P}(\mu_t, g_t)$ dependa del estado **verdadero** $\mu_t$, no de la propia predicción anterior — bajo esa definición no hay propagación de error vía $A$ en absoluto (cada predicción es fresca desde el estado real, así que $\mathbb{E}\|e_{t+1}\|^2\leq\delta^2$ ya es la cota final, sin necesidad de la serie geométrica). El caso que EMP realmente necesita es el **recursivo**: cuando se saltan varios pasos consecutivos sin evaluar $g_\theta$, el predictor debe alimentarse de su propia estimación anterior, $\hat\mu_{t+1} = \mathcal{P}(\hat\mu_t, g_t)$. Ese es el caso analizado abajo.
 
-Entonces, para todo $T \geq 1$:
+**Teorema EMP-1 (Bound de Error Acumulado, régimen recursivo).**
+Sea $\mathcal{P}$ un predictor recursivo, $\hat\mu_{t+1} = \mathcal{P}(\hat\mu_t, g_t)$, con error de un paso acotado $\mathbb{E}\|\mu_{t+1} - \mathcal{P}(\mu_t, g_t)\|^2 \leq \delta^2$ para todo $t$ (error si se alimentara con el estado verdadero). Sea $\rho = \rho(A) < 1$. Asumimos que las innovaciones $\delta_t$ son independientes de $e_t$ con covarianza $\mathbb{E}[\delta_t\delta_t^T]\preceq\sigma^2 I$. Entonces:
 
-$$\mathbb{E}[E_T] \leq \frac{\delta}{1 - \rho} + T \cdot \frac{\sigma \cdot \rho}{1 - \rho}$$
+$$\limsup_{t\to\infty}\mathbb{E}\|e_t\| \leq \frac{\delta+\sigma}{1-\rho} \qquad\text{(error por paso, se satura en } O(1)\text{)}$$
+$$\mathbb{E}[E_T] \leq T\cdot\frac{\delta+\sigma}{1-\rho} + O(1) \qquad\text{(suma acumulada sobre } T \text{ pasos, siempre } O(T)\text{)}$$
 
-*Demostración.* Consideramos la dinámica del error $e_t = \mu_t - \hat{\mu}_t$. Separamos el error en dos componentes: el error de predicción del predictor ($\tilde{e}_t$) y la propagation del error a través de la dinámica del sistema.
+*Demostración.* Con predicción recursiva, el error se propaga: $e_{t+1} = \mu_{t+1} - \hat\mu_{t+1} = (A\mu_t + b + \delta_t) - \mathcal{P}(\hat\mu_t, g_t)$. Descomponiendo respecto al predictor evaluado en el estado verdadero, $e_{t+1} = \underbrace{[\mu_{t+1}-\mathcal{P}(\mu_t,g_t)]}_{\text{error de un paso}, \leq\delta} + \underbrace{[\mathcal{P}(\mu_t,g_t)-\mathcal{P}(\hat\mu_t,g_t)]}_{\text{propagación}}$. Si $\mathcal{P}(\cdot,g_t)$ hereda la sensibilidad lineal de $A$ (constante de Lipschitz $\rho$ respecto a su primer argumento, consistente con la linealización de la dinámica), el segundo término está acotado por $\rho\|e_t\|$, dando:
 
-El predictor tiene error $\tilde{e}_{t+1} = \mu_{t+1} - \hat{\mu}_{t+1}$ con $\mathbb{E}\|\tilde{e}_{t+1}\|^2 \leq \delta^2$.
+$$\mathbb{E}\|e_{t+1}\| \leq \rho\cdot\mathbb{E}\|e_t\| + \delta + \sigma$$
 
-La dinámica de $\mu$ es: $\mu_{t+1} = A \mu_t + b + \delta_t$. Si el predictor fuera perfecto ($\hat{\mu}_{t+1} = \mu_{t+1}$), tendríamos $e_{t+1} = 0$. En la práctica:
+Desenrollando desde $e_0=0$: $\mathbb{E}\|e_t\| \leq \sum_{i=0}^{t-1}\rho^i(\delta+\sigma) \leq \frac{\delta+\sigma}{1-\rho}$, que **no depende de $t$** — este es el resultado correcto de saturación en $O(1)$, y es válido para el error *por paso*, no para la suma. La suma sobre $T$ pasos de una cantidad acotada por una constante es, trivialmente, $O(T)$: $\mathbb{E}[E_T] = \sum_{t=1}^T \mathbb{E}\|e_t\| \leq T\cdot\frac{\delta+\sigma}{1-\rho}$ (el término $O(1)$ adicional viene de los primeros pasos, donde $\rho^t\|e_0\|$ aún no se ha desvanecido). $\blacksquare$
 
-$$e_{t+1} = A \mu_t + b + \delta_t - \mathcal{P}(\mu_t, g_t) = (A \mu_t + b - \mathcal{P}(\mu_t, g_t)) + \delta_t$$
-
-Definimos el **error del predictor** $\tilde{e}_{t+1} = \mu_{t+1} - \hat{\mu}_{t+1}$. Por la bound de predictor:
-
-$$\mathbb{E}\|\tilde{e}_{t+1}\|^2 \leq \delta^2$$
-
-Ahora, el error total satisface:
-
-$$\mathbb{E}\|e_{t+1}\| \leq \mathbb{E}\|\tilde{e}_{t+1}\| + \mathbb{E}\|\delta_t\| \leq \delta + \sigma$$
-
-Pero esto no captura la estructura de $A$. Mejor: note que el predictor aproxima la dinámica verdadera con error acotado, y la parte lineal $A \mu_t$ propagael error con factor $\rho(A)$ por step. Para un sistema LTI estables con $\rho(A) < 1$:
-
-$$\mathbb{E}\|e_t\| \leq \rho(A)^t \|e_0\| + \sum_{i=0}^{t-1} \rho(A)^i \cdot (\delta + \sigma)$$
-
-Como $\rho(A)^t \|e_0\| \to 0$ cuando $t \to \infty$ (sistema estable):
-
-$$\limsup_{t \to \infty} \mathbb{E}\|e_t\| \leq \frac{\delta + \sigma}{1 - \rho(A)}$$
-
-Para el error acumulado, integrando sobre $T$ steps:
-
-$$\mathbb{E}[E_T] = \sum_{t=1}^T \mathbb{E}\|e_t\| \leq \frac{\delta}{1-\rho} + T \cdot \frac{\delta + \sigma}{1-\rho}$$
-
-Asumiendo $\delta \geq \sigma$ (error de predictor dominates sobre ruido de innovación):
-
-$$\mathbb{E}[E_T] \leq \frac{\delta}{1-\rho} + T \cdot \frac{2\delta}{1-\rho}$$
-
-Simplificando: $\mathbb{E}[E_T] \leq \frac{\delta}{1-\rho}(1 + 2T)$. $\blacksquare$
-
-*Remark 3.1.* El factor clave es $\rho(A)$ — si $\rho(A) \approx 1$, el error se acumula linealmente ($O(T)$); si $\rho(A) \ll 1$, el error se satura en $O(1)$. Esto justifica la necesidad de que la dinámica de $\mu$ sea contractive.
+*Remark 3.1 (corregido).* $\rho(A)$ controla la **constante de saturación** del error por paso, no si la suma acumulada crece o no — la suma $E_T$ siempre es $O(T)$ para cualquier $\rho<1$ fijo, porque es la suma de $T$ términos cada uno acotado por debajo de una cota positiva. Lo que sí depende fuertemente de $\rho$ es la pendiente: $\rho\to 0$ hace la pendiente $\to(\delta+\sigma)$; $\rho\to 1$ hace la pendiente $\to\infty$. La afirmación anterior ("si $\rho(A)\ll1$, el error se satura en $O(1)$") era válida solo para el error por paso, no para $E_T$, y se corrige aquí explícitamente.
 
 *Remark 3.2.* En la práctica, $A$ no es constante — cambia lentamente conforme $\theta$ cambia. Esto viola la suposición de sistema LTI. Un análisis más realista usaría time-varying systems: $\mu_{t+1} = A_t \mu_t + b_t + \delta_t$ con $\sup_t \rho(A_t) \leq \rho_{max} < 1$.
 
@@ -757,29 +739,28 @@ $$\mathbb{E}[\text{Regret}_T^{\text{explore}}] \leq 2\sqrt{3T\ln 3} + 4\sqrt{2T\
 (donde el segundo término viene de separar el término de covarianza de $\ell_t$). Aproximadamente $O(\sqrt{T})$.
 
 **Componente 2: Regret de generalización (discretización).**
-La entropía $H$ es continua en $[0, H_{max}]$. Para manejar esto, discretizamos el intervalo en $M$ bins de tamaño $\delta = H_{max}/M$. Sea $b(H) = \lfloor H/\delta \rfloor$ el índice del bin.
 
-El router aprende una Q-function $Q(b, N)$ por bin-acción. Por concentración de sumas de variables i.i.d.:
+*Corrección (2026-07-20).* La versión anterior de esta sección reutilizaba el símbolo $T$ para dos cantidades distintas: el horizonte de integración del ODE de NMF (una constante fija, $T\in[0.5,2.0]$, la misma $T$ de TER-1) y el número de tokens de entrenamiento vistos por el router (que crece sin límite, la $T$ de $\text{Regret}_T$). Esa colisión de notación es lo que producía el exponente sin sentido $T^{7/2}$ en la línea intermedia — mezclaba una potencia de la $T$-horizonte (fija) con una potencia de la $T$-tokens (creciente) como si fueran la misma variable. Aquí la $T$-horizonte del ODE se escribe $T_{\text{ode}}$ (constante) y la $T$-tokens se deja como $T$.
 
-$$\mathbb{P}\left(|Q(b,N) - Q^\star(b,N)| > \epsilon\right) \leq 2\exp\left(-\frac{2T_b \epsilon^2}{(4M_4T^5/80)^2}\right)$$
+La entropía $H$ es continua en $[0, H_{max}]$. Discretizamos el intervalo en $M$ bins de tamaño $\Delta H = H_{max}/M$; sea $b(H) = \lfloor H/\Delta H \rfloor$ el índice del bin, y $T_b$ el número de visitas (tokens) al bin $b$, con $\sum_b T_b = T$.
 
-donde $T_b$ es el número de visitas al bin $b$. Para bins con $T_b \geq 1$:
+El router aprende una Q-function $Q(b, N)$ por bin-acción. Por concentración de sumas de variables i.i.d., el error de estimación de $Q$ en un bin con $T_b$ visitas satisface:
 
-$$\mathbb{E}[|Q(b,N) - Q^\star(b,N)|] \leq M_4 T^5/40 \cdot \sqrt{\frac{\ln(2M)}{T_b}}$$
+$$\mathbb{E}[|Q(b,N) - Q^\star(b,N)|] \leq \kappa \cdot \sqrt{\frac{\ln(2M)}{T_b}}, \qquad \kappa := \frac{M_4 T_{\text{ode}}^5}{40}$$
 
-para $M$ bins. Agregando sobre todos los bins y usando $\sum_b T_b = T$:
+donde $\kappa$ es una **constante** (no crece con $T$): es exactamente el bound de error de integración de TER-1 evaluado en el horizonte fijo $T_{\text{ode}}$. Agregando sobre los $M$ bins:
 
-$$\mathbb{E}[\text{Regret}_T^{\text{gen}}] \leq \lambda \cdot \sum_b T_b \cdot \frac{M_4 T^5}{40} \cdot \sqrt{\frac{\ln(2M)}{T_b} = \frac{\lambda M_4 T^6}{40} \sqrt{\ln(2M)} \sum_b T_b^{1/2}}$$
+$$\mathbb{E}[\text{Regret}_T^{\text{gen}}] \leq \lambda\kappa\sqrt{\ln(2M)}\sum_b \sqrt{T_b}$$
 
-Usando $\sum_b T_b^{1/2} \leq \sqrt{M \sum_b T_b} = \sqrt{MT}$ por Cauchy-Schwarz:
+Por Cauchy-Schwarz, $\sum_b \sqrt{T_b} \leq \sqrt{M\sum_b T_b} = \sqrt{MT}$, así que:
 
-$$\mathbb{E}[\text{Regret}_T^{\text{gen}}] \leq \frac{\lambda M_4 T^6}{40} \sqrt{\frac{MT \ln(2M)}{}} = \frac{\lambda M_4 T^{7/2}}{40} \sqrt{M \ln(2M)}$$
+$$\mathbb{E}[\text{Regret}_T^{\text{gen}}] \leq \lambda\kappa\sqrt{MT\ln(2M)}$$
 
-Elegimos $M = \tilde{O}(T^{1/3})$ para equilibrar ambos términos:
+Este término crece con $\sqrt{M}$ (más bins = estimar cada uno con menos datos) mientras que un bin más fino reduce el error de aproximación de $N^\star(H)$ por bin constante; el balance óptimo entre ambos efectos se obtiene minimizando sobre $M$. Con $M = \Theta(T^{1/3})$:
 
-$$\mathbb{E}[\text{Regret}_T^{\text{gen}}] \leq \lambda \cdot T \cdot \max_{|H-H'| \leq \delta} |\epsilon(N_H, N_{H'})|$$
+$$\mathbb{E}[\text{Regret}_T^{\text{gen}}] \leq \lambda\kappa\sqrt{T^{1/3}\cdot T\cdot\ln(2M)} = \lambda\kappa\, T^{2/3}\sqrt{\ln(2M)} = O\!\left(T^{2/3}\sqrt{\log T}\right)$$
 
-con $\delta = H_{max}/M^{2/3}$. El máximo de $|\epsilon|$ sobre intervalos pequeños está acotado por Lipschitz de $f_\theta$. $\blacksquare$
+Esto es **sublineal** en $T$ (el regret promedio por token, $\text{Regret}_T/T = O(T^{-1/3}\sqrt{\log T})$, tiende a 0), consistente con las tasas estándar de bandits Lipschitz/continuos con discretización adaptativa — no la tasa lineal-o-peor que sugería la versión anterior. $\blacksquare$
 
 *Remark 4.2 (Interpretación).*
 - El término de exploración $O(\sqrt{T})$ es independientes de la distribución de entropía — es un bound worst-case sobre el algoritmo de bandit.
@@ -1133,30 +1114,32 @@ donde $\nu_j = \min(j-1, P-j+1)/P$ y $n$ es el orden del filtro.
 
 ### 6.4 Teorema FDGD-1: Convergencia con Filtro
 
+*Corrección (2026-07-20).* La versión anterior de esta prueba expandía $\|\theta_{t+1}-\theta^*\|^2$ y omitía, sin justificación, los términos cruzados entre $(\theta_t-\theta^*)$ y el error de filtrado $\epsilon_t = g_t - g_t^{\text{filtered}}$. Esos términos son de orden $O(\eta)$ (no $O(\eta^2)$), así que si no se anulan, dominan sobre el término de contracción y el argumento de convergencia no es válido. Anularlos requiere que el filtrado no introduzca sesgo, es decir $\mathbb{E}[\epsilon_t\mid\theta_t]=0$ — equivalente a que la banda de frecuencias descartada contenga solo ruido de minibatch y no una componente sistemática del gradiente poblacional $\nabla\mathcal{L}(\theta_t)$. La versión original nunca declaraba esto como hipótesis; aquí se hace explícito como Hipótesis 5.
+
 **Teorema FDGD-1 (Convergencia de SGD Filtrado).**
 Sea $\theta_{t+1} = \theta_t - \eta \cdot g_t^{\text{filtered}}$ donde $g_t^{\text{filtered}} = \mathcal{F}^{-1}(F(\hat{g}_t))$ y $F$ es el filtro paso bajo de cutoff $\omega_c$. Asumimos:
 1. $\mathcal{L}$ es $\mu$-strongly convex y $L$-smooth
 2. $\mathbb{E}[g_t] = \nabla \mathcal{L}(\theta_t)$ (gradiente unbiased)
 3. $\mathbb{E}[\|g_t - \nabla\mathcal{L}(\theta_t)\|^2] \leq \sigma^2$ (varianza de ruido acotada)
 4. El filtro preserva al menos fracción $\rho$ de energía: $\|g_t^{\text{filtered}}\|^2 \geq \rho \|g_t\|^2$ con $\rho \in (0,1]$
+5. **(Filtrado insesgado.)** $\mathbb{E}[\epsilon_t \mid \theta_t] = 0$ donde $\epsilon_t = g_t - g_t^{\text{filtered}}$ — la banda de alta frecuencia descartada por $F$ contiene, en esperanza, solo ruido estocástico de minibatch y no una componente sistemática de $\nabla\mathcal{L}(\theta_t)$ (espectro del gradiente poblacional simétrico/centrado en cero fuera de la banda de paso).
 
 Entonces para learning rate $\eta < \min(2/L, 1/\mu)$:
 
 $$\mathbb{E}[\|\theta_t - \theta^*\|^2] \leq (1 - \eta\mu)^t \|\theta_0 - \theta^*\|^2 + \frac{\eta L \sigma^2}{\mu^2} \cdot \frac{1}{\rho}$$
 
-*Demostración.* Definimos el error de filtrado como $\epsilon_t = g_t - g_t^{\text{filtered}}$, de modo que $g_t^{\text{filtered}} = g_t - \epsilon_t$.
+*Demostración.* Definimos $\epsilon_t = g_t - g_t^{\text{filtered}}$ y $\tilde{g}_t = g_t - \nabla\mathcal{L}(\theta_t)$ (ruido de minibatch, $\mathbb{E}[\tilde g_t\mid\theta_t]=0$ por Hipótesis 2). La actualización es:
 
-La actualización es:
+$$\theta_{t+1} - \theta^* = (\theta_t-\theta^*) - \eta\nabla\mathcal{L}(\theta_t) - \eta\tilde{g}_t + \eta\epsilon_t$$
 
-$$\theta_{t+1} = \theta_t - \eta(g_t - \epsilon_t) = \theta_t - \eta \nabla\mathcal{L}(\theta_t) - \eta(g_t - \nabla\mathcal{L}(\theta_t)) + \eta \epsilon_t$$
+Expandiendo el cuadrado sin omitir términos:
 
-Sea $\tilde{g}_t = g_t - \nabla\mathcal{L}(\theta_t)$ el ruido (martingala con $\mathbb{E}[\tilde{g}_t] = 0$). Por $\mu$-strong convexidad:
+$$\|\theta_{t+1}-\theta^*\|^2 = \|\theta_t-\theta^*\|^2 - 2\eta\langle\theta_t-\theta^*,\nabla\mathcal{L}(\theta_t)\rangle + \eta^2\|\nabla\mathcal{L}(\theta_t)\|^2$$
+$$\quad - 2\eta\langle\theta_t-\theta^*,\,-\tilde g_t+\epsilon_t\rangle + 2\eta^2\langle\nabla\mathcal{L}(\theta_t),\,-\tilde g_t+\epsilon_t\rangle + \eta^2\|{-\tilde g_t+\epsilon_t}\|^2$$
 
-$$\|\theta_{t+1} - \theta^*\|^2 = \|\theta_t - \theta^*\|^2 - 2\eta\langle\theta_t - \theta^*, \nabla\mathcal{L}(\theta_t)\rangle + \eta^2\|\nabla\mathcal{L}(\theta_t)\|^2 + \eta^2\|\tilde{g}_t\|^2 + \eta^2\|\epsilon_t\|^2$$
+Tomando $\mathbb{E}[\cdot\mid\theta_t]$: el término $-2\eta\langle\theta_t-\theta^*,-\tilde g_t+\epsilon_t\rangle$ es exactamente el que la versión anterior omitía. Se anula término a término: $\mathbb{E}[\tilde g_t\mid\theta_t]=0$ por Hipótesis 2, y $\mathbb{E}[\epsilon_t\mid\theta_t]=0$ por Hipótesis 5 (nueva). Sin la Hipótesis 5 este término es $O(\eta)$ y no hay garantía de que se cancele — es precisamente el motivo por el que hace falta declararla. Por el mismo argumento, el término cruzado $2\eta^2\langle\nabla\mathcal{L}(\theta_t),-\tilde g_t+\epsilon_t\rangle$ también se anula en esperanza.
 
-Los términos cruzados con $\tilde{g}_t$ vanish porque $\mathbb{E}[\tilde{g}_t|\theta_t] = 0$. Asumimos $\epsilon_t$ independiente de $\theta_t$. Usando $\|\nabla\mathcal{L}(\theta_t)\|^2 \leq 2L\mathcal{L}(\theta_t) \leq L^2\|\theta_t - \theta^*\|^2$ y $\|\epsilon_t\|^2 \leq (1-\rho)(\|g_t\|^2) \leq (1-\rho)(\|\nabla\mathcal{L}\|^2 + \sigma^2) \leq (1-\rho)(L^2\|\theta_t - \theta^*\|^2 + \sigma^2)$.
-
-Con $\eta < 2/L$:
+Queda el término $\eta^2\mathbb{E}[\|{-\tilde g_t+\epsilon_t}\|^2] = \eta^2\left(\mathbb{E}\|\tilde g_t\|^2 - 2\mathbb{E}\langle\tilde g_t,\epsilon_t\rangle + \mathbb{E}\|\epsilon_t\|^2\right)$. El término cruzado $\tilde g_t$-$\epsilon_t$ se acota por Cauchy-Schwarz, $|\mathbb{E}\langle\tilde g_t,\epsilon_t\rangle| \leq \sqrt{\mathbb{E}\|\tilde g_t\|^2}\sqrt{\mathbb{E}\|\epsilon_t\|^2}$, y es $O(\eta^2)$ igual que los otros dos — se absorbe en el mismo paso de "$\eta$ suficientemente pequeño" usado a continuación, sin cambiar la tasa final. Usando $\|\nabla\mathcal{L}(\theta_t)\|^2 \leq L^2\|\theta_t - \theta^*\|^2$ y $\|\epsilon_t\|^2 \leq (1-\rho)(L^2\|\theta_t - \theta^*\|^2 + \sigma^2)$ (Hipótesis 4), con $\eta < 2/L$:
 
 $$\mathbb{E}[\|\theta_{t+1} - \theta^*\|^2] \leq (1 - \eta\mu/2)\mathbb{E}[\|\theta_t - \theta^*\|^2] + \eta^2\frac{L^2 + (1-\rho)L^2}{\rho}\mathbb{E}[\|\theta_t - \theta^*\|^2] + \frac{\eta^2\sigma^2}{\rho}$$
 
@@ -1170,7 +1153,7 @@ $$\mathbb{E}[\|\theta_t - \theta^*\|^2] \leq (1 - \eta\mu)^t\|\theta_0 - \theta^
 
 ya que $\sum_{k=0}^{t-1}(1-\eta\mu)^k = \frac{1-(1-\eta\mu)^t}{\eta\mu} \leq \frac{1}{\eta\mu}$. $\blacksquare$
 
-*Remark 6.1.* El bound tiene $(M^2+\sigma^2)/\rho$ en lugar de $\sigma^2/\rho$ del caso sin filtro. Para $\rho \geq 0.5$, la degradación es a lo sumo factor 2. No se requiere la regla del 50% para convergencia — es solo un bound práctico sobre la degradación.
+*Remark 6.1.* El bound tiene $(M^2+\sigma^2)/\rho$ en lugar de $\sigma^2/\rho$ del caso sin filtro. Para $\rho \geq 0.5$, la degradación es a lo sumo factor 2. No se requiere la regla del 50% para convergencia — es solo un bound práctico sobre la degradación. La Hipótesis 5 es la condición que realmente hace o rompe esta garantía: si el gradiente poblacional tiene contenido genuino en alta frecuencia (no solo ruido), FDGD introduce un sesgo sistemático y el bound de este teorema no aplica.
 
 ### 6.5 Teorema FDGD-2: Selección de Cutoff
 
@@ -1276,71 +1259,46 @@ $$\theta_{GNS} = \theta - \eta \sum_{i: \rho_i \geq \epsilon_{GNS}} g_i$$
 
 ### 7.4 Teorema GNS-1: Bound del Error de Skip
 
+*Corrección (2026-07-20).* La versión anterior de este teorema probaba tres argumentos distintos en sucesión y abandonaba los dos primeros a medio camino (uno señalado en el propio texto como "muy débil", otro que terminaba en "esto no nos da un bound superior") antes de aterrizar en un cuarto argumento que asumía —sin declararlo como hipótesis del teorema— que el ruido de skip es isotrópico e independiente de $\Delta_t$. Ese supuesto no es gratis: sin él, solo se puede probar una cota determinista peor ($O(T)$, no $O(\sqrt{T})$). Además el enunciado original incluía un factor $1/\mu$ que la prueba final nunca produce. Aquí se separan explícitamente los dos regímenes, cada uno con su propia hipótesis y su propia tasa.
+
 **Teorema GNS-1 (Divergencia Acumulada por Skip).**
-Sea $\theta_t$ la solución SGD completa en paso $t$, y $\tilde{\theta}_t$ la solución GNS. Sean $g_i^{(t)}$ los gradientes en paso $t$, y sea $\mathcal{L}$ la función de loss (asumimos $\mathcal{L}$ es $L$-Lipschitz en gradientes y $\mu$-fuertemente convexa). Sea $\delta = \max_{i: \rho_i < \epsilon_{GNS}} \|g_i\|$ la máxima norma de gradiente en capas skippeadas.
+Sea $\theta_t$ la solución SGD completa en paso $t$, y $\tilde{\theta}_t$ la solución GNS. Sean $g_i^{(t)}$ los gradientes en paso $t$. Sea $\delta = \max_{i: \rho_i < \epsilon_{GNS}} \|g_i\|$ la máxima norma de gradiente en capas skippeadas, y $n_{skip}$ el número de capas skippeadas por paso. Sea $\Delta_t = \theta_t - \tilde{\theta}_t$, con $\Delta_0 = 0$.
 
-Entonces, después de $T$ pasos:
+*Caso 1 (determinista, sin hipótesis adicionales).* Para todo $t$:
 
-$$\mathbb{E}[\|\theta_T - \tilde{\theta}_T\|^2] \leq \frac{\eta^2 \delta^2 T}{\mu}$$
+$$\|\Delta_T\| \leq T \cdot \eta \cdot n_{skip} \cdot \delta \qquad \Rightarrow \qquad \|\Delta_T\| = O(T)$$
 
-*Demostración.* La diferencia $\Delta_t = \theta_t - \tilde{\theta}_t$ evoluciona como:
+*Caso 2 (estocástico, bajo la Hipótesis GNS-1).* Si además el ruido de skip $d_t := \sum_{i:\rho_i<\epsilon_{GNS}} g_i^{(t)}$ es isotrópico en $\mathbb{R}^d$ y no correlacionado con $\Delta_t$ paso a paso (Hipótesis GNS-1), entonces:
 
-$$\Delta_{t+1} = \theta_{t+1} - \tilde{\theta}_{t+1} = (\theta_t - \eta \sum_i g_i^{(t)}) - (\tilde{\theta}_t - \eta \sum_{i: \rho_i \geq \epsilon_{GNS}} g_i^{(t)})$$
-$$= \Delta_t - \eta \sum_{i: \rho_i < \epsilon_{GNS}} g_i^{(t)}$$
+$$\mathbb{E}[\|\Delta_T\|^2] = T\eta^2\delta^2 \qquad \Rightarrow \qquad \sqrt{\mathbb{E}[\|\Delta_T\|^2]} = \eta\delta\sqrt{T} = O(\sqrt{T})$$
 
-Por lo tanto:
+*Demostración.* La diferencia $\Delta_t$ evoluciona como:
 
-$$\|\Delta_{t+1}\|^2 = \|\Delta_t\|^2 - 2\eta \langle \Delta_t, \sum_{i: \rho_i < \epsilon_{GNS}} g_i^{(t)} \rangle + \eta^2 \left\|\sum_{i: \rho_i < \epsilon_{GNS}} g_i^{(t)}\right\|^2$$
+$$\Delta_{t+1} = \Delta_t - \eta \sum_{i: \rho_i < \epsilon_{GNS}} g_i^{(t)} = \Delta_t - \eta d_t$$
 
-Para el término cruzado, por Cauchy-Schwarz:
+**Caso 1.** Por la desigualdad triangular, $\|d_t\| \leq n_{skip}\delta$ para todo $t$, así que:
 
-$$|\langle \Delta_t, \sum_{i: \rho_i < \epsilon_{GNS}} g_i^{(t)} \rangle| \leq \|\Delta_t\| \cdot \left\|\sum_{i: \rho_i < \epsilon_{GNS}} g_i^{(t)}\right\| \leq \|\Delta_t\| \cdot n_{skip} \cdot \delta$$
+$$\|\Delta_{t+1}\| \leq \|\Delta_t\| + \eta\|d_t\| \leq \|\Delta_t\| + \eta n_{skip}\delta$$
 
-Pero esto es muy débil. Usamos un argumento de contractividad de strongly convex.
+Iterando desde $\Delta_0 = 0$: $\|\Delta_T\| \leq T\eta n_{skip}\delta$. Esta cota no requiere ningún supuesto sobre la correlación entre $\Delta_t$ y $d_t$ — es válida en el peor caso absoluto (adversarial), incluyendo el caso en que el ruido de skip siempre apunta a alejar $\tilde\theta_t$ de $\theta_t$.
 
-Asumimos $\mathcal{L}$ es $\mu$-fuertemente convexa. El operator de update SGD completo es:
+**Caso 2.** Bajo la Hipótesis GNS-1:
 
-$$\theta_{t+1} = \arg\min_\theta \left\{\mathcal{L}(\theta) + \frac{1}{2\eta}\|\theta - \theta_t\|^2\right\}$$
+$$\|\Delta_{t+1}\|^2 = \|\Delta_t\|^2 - 2\eta\langle\Delta_t, d_t\rangle + \eta^2\|d_t\|^2$$
 
-El operator GNS corresponde a resolver:
+Tomando esperanza y usando $\mathbb{E}[\langle\Delta_t, d_t\rangle] = 0$ (independencia + isotropía de $d_t$) y $\mathbb{E}[\|d_t\|^2] = \delta^2$:
 
-$$\tilde{\theta}_{t+1} = \arg\min_\theta \left\{\tilde{\mathcal{L}}(\theta) + \frac{1}{2\eta}\|\theta - \tilde{\theta}_t\|^2\right\}$$
+$$\mathbb{E}[\|\Delta_{t+1}\|^2] = \mathbb{E}[\|\Delta_t\|^2] + \eta^2\delta^2$$
 
-donde $\tilde{\mathcal{L}}$ es la loss ignorando capas skippeadas. La diferencia entre ambos puede boundarse. Alternativamente, usamos la siguiente cota más simple:
+Iterando desde $\Delta_0=0$: $\mathbb{E}[\|\Delta_T\|^2] = T\eta^2\delta^2$. $\blacksquare$
 
-El skip introduce un "ruido" de magnitud $\eta \delta$ por paso en la dirección de las capas skippeadas. Si asumimos que las direcciones de este ruido son aproximadamente ortogonales entre pasos (worst case), la acumulación es:
+El Caso 1 es siempre válido pero pesimista ($O(T)$, crece sin cota). El Caso 2 es la tasa relevante en la práctica ($O(\sqrt{T})$, comportamiento de martingala) pero depende de que el ruido de skip no esté sistemáticamente correlacionado con la dirección de divergencia acumulada — algo plausible si las capas que se skippean cambian de iteración a iteración, pero no garantizado si el criterio $\rho_i$ skippea repetidamente la misma capa (ver Falla 2 en §7.8, que además supone este régimen estocástico explícitamente).
 
-$$\|\Delta_T\|^2 \leq T \cdot (\eta \delta)^2$$
-
-Asumiendo $\mathcal{L}$ es $\mu$-strongly convex, la distancia $\|\theta - \theta^*\|$ decrece geométricamente, pero aquí no podemos asumir que $\theta_t$ converge a $\theta^*$ porque $\tilde{\theta}_t$ toma un camino diferente.
-
-Para la cota más simple y rigorosa: asumimos $\|\Delta_t\| \leq D$ (bounded). Entonces:
-
-$$\|\Delta_{t+1}\|^2 = \|\Delta_t\|^2 + \eta^2 \delta^2 - 2\eta \langle \Delta_t, d_t \rangle$$
-
-donde $d_t = \sum_{i: \rho_i < \epsilon_{GNS}} g_i^{(t)}$ con $\|d_t\| \leq n_{skip} \delta$. El término $-2\eta \langle \Delta_t, d_t \rangle$ puede ser positivo o negativo.
-
-El caso worse case (máxima divergencia) ocurre cuando $\langle \Delta_t, d_t \rangle$ es siempre negativo (el ruido de skip aleja siempre de la solución). En ese caso:
-
-$$\|\Delta_{t+1}\|^2 \geq \|\Delta_t\|^2 + \eta^2 \delta^2 - 2\eta \|\Delta_t\| \cdot n_{skip} \delta$$
-
-Si $\|\Delta_t\| \leq \eta n_{skip} \delta$ (condición que se cumple por inducción si $\eta n_{skip} \delta \leq D$), entonces $\|\Delta_{t+1}\|^2 \geq \|\Delta_t\|^2 - \eta^2 n_{skip}^2 \delta^2 + \eta^2 \delta^2 = \|\Delta_t\|^2$. Esto no nos da un bound superior.
-
-Mejor argumento: supongamos que el ruido de skip es isotrópico en $\mathbb{R}^d$ y no correlacionado con $\Delta_t$. Entonces:
-
-$$\mathbb{E}[\|\Delta_{t+1}\|^2] = \mathbb{E}[\|\Delta_t\|^2] + \eta^2 \delta^2$$
-
-ya que $\mathbb{E}[\langle \Delta_t, d_t \rangle] = 0$ si $d_t$ es isotrópico e independiente de $\Delta_t$. Por lo tanto:
-
-$$\mathbb{E}[\|\Delta_T\|^2] = \mathbb{E}[\|\Delta_0\|^2] + T \eta^2 \delta^2 = T \eta^2 \delta^2$$
-
-(ya que $\Delta_0 = 0$). $\blacksquare$
-
-*Remark 7.1.* La cota $\delta = \max_{i: \rho_i < \epsilon_{GNS}} \|g_i\|$ puede estimarse en la práctica como $\delta \approx \epsilon_{GNS} \cdot \max_j \|g_j\|$ si la distribución de $\|g_i\|$ es aproximadamente geométrica. Entonces:
+*Remark 7.1.* La cota $\delta = \max_{i: \rho_i < \epsilon_{GNS}} \|g_i\|$ puede estimarse en la práctica como $\delta \approx \epsilon_{GNS} \cdot \max_j \|g_j\|$ si la distribución de $\|g_i\|$ es aproximadamente geométrica. Bajo el régimen estocástico (Caso 2):
 
 $$\mathbb{E}[\|\theta_T - \tilde{\theta}_T\|] \leq \eta \delta \sqrt{T} = \eta \epsilon_{GNS} \cdot \max_j \|g_j\| \cdot \sqrt{T}$$
 
-Para $\eta = 10^{-4}, \epsilon_{GNS} = 0.1, \max_j \|g_j\| \approx 1, T = 10^4$: la divergencia máxima es $\sim 1$, comparable a la escala de los pesos.
+Para $\eta = 10^{-4}, \epsilon_{GNS} = 0.1, \max_j \|g_j\| \approx 1, T = 10^4$: la divergencia esperada es $\sim 1$, comparable a la escala de los pesos. Bajo el régimen determinista (Caso 1), la misma configuración da una cota mucho más conservadora, $\|\Delta_T\| \leq T\eta n_{skip}\delta$, que crece linealmente y debe usarse cuando no se puede justificar la Hipótesis GNS-1.
 
 **Corolario GNS-1.1 (Convergencia Condicional).**
 Si $\mathcal{L}$ es $\mu$-strongly convex y el learning rate satisface $\eta < 2/\mu$, entonces tanto $\theta_t$ como $\tilde{\theta}_t$ convergen a sus respectivos óptimos $\theta^*$ y $\tilde{\theta}^*$. La distancia entre los óptimos satisface:
@@ -1452,7 +1410,7 @@ Una capa puede tener gradientes pequeños porque está cerca de un óptimo local
 *Señales de alerta:* El loss de validación deja de mejorar pero los gradientes de la capa también son pequeños — esto puede ser skip o puede ser stuck.
 
 **Falla 2: Acumulación de errores de skip en series largas.**
-Si hacemos skip en la misma capa por $T$ pasos consecutivos, el error $\|\theta_T - \tilde{\theta}_T\|$ escala como $\sim \eta \delta \sqrt{T}$ (Teorema GNS-1). Para $T$ grande (e.g., $10^5$ pasos), esto diverge como $\sqrt{T}$, mientras que el drift de un optimizador normal también escala como $\sqrt{T}$ (martingala). El drift acumulado de skip es aditivo al drift normal del SGD, potencialmente causando degradación significativa.
+Si hacemos skip en la *misma* capa por $T$ pasos consecutivos, la Hipótesis GNS-1 (ruido de skip isotrópico e independiente paso a paso) deja de ser plausible: el ruido apunta repetidamente en la dirección del gradiente de esa capa, no en direcciones que se cancelan en promedio. Este es exactamente el régimen del **Caso 1** (determinista) del Teorema GNS-1, no del Caso 2: el error relevante es $\|\theta_T - \tilde{\theta}_T\| \leq T\eta n_{skip}\delta$, que crece **linealmente**, no como $\sqrt{T}$. Para $T$ grande (e.g., $10^5$ pasos) esto es sustancialmente peor que el drift $\sqrt{T}$ de un SGD normal (martingala), y no simplemente aditivo a él — es un régimen cualitativamente distinto que puede dominar el entrenamiento si el criterio de skip no alterna entre capas.
 
 **Falla 3: Sesgo hacia capas de alta magnitud.**
 Si las capas de atención tienen gradientes sistemáticamente mayores que las capas FFN (o viceversa), el criterio $\rho_i$ introduce un sesgo estructural que puede hacer que las capas de menor magnitud se desconecten del entrenamiento.
@@ -1503,22 +1461,24 @@ Para $k = 128, d_i = 4096$: overhead = $256/4096 = 6.25\%$. Este overhead es ace
 
 *Demostración.* Directo del conteo de operaciones. $\blacksquare$
 
-**Teorema SMA-3 (Preservación de Gradientes Importantes).**
-Sea $g = \partial\mathcal{L}/\partial h$ el gradiente de la loss respecto a la activación $h$. Sea $g_k = U_k U_k^T g$ la proyección de $g$ en el subspace de los $k$ vectores singulares dominantes. Entonces:
+*Corrección (2026-07-20).* La versión anterior afirmaba $\|g-g_k\|\le\|g\|\cdot\sigma_{k+1}/\sigma_k$, es decir, que la componente de $g$ descartada por la proyección $U_kU_k^T$ es pequeña en norma propia. Eso no se sostiene: $g=\partial\mathcal{L}/\partial h$ es el gradiente que llega de capas *posteriores* y no tiene por qué alinearse con los vectores singulares de $W$ (una propiedad de la matriz de *pesos*, no del gradiente). La prueba original lo intentaba justificar con "$\sigma_1\approx\sigma_k$ (buen conditioning)" — una hipótesis no declarada ni usada consistentemente ($\sigma_1$ vs. $\sigma_k$ en el numerador/denominador de pasos consecutivos), y el paso "$\|U_\perp\|\cdot\|U_\perp^Tg_h\| = \|g_h^\perp\|$" es una identidad trivial (ya que $\|U_\perp\|=1$) que no acota nada. Lo que sí es demostrable sin supuestos adicionales es el efecto de descartar $g_h^\perp$ sobre el gradiente que SMA efectivamente propaga hacia capas anteriores, $g_x = W^Tg_h$ — porque ahí $g_h^\perp$ se multiplica por los valores singulares pequeños $\Sigma_\perp$ antes de combinarse con $V$. Esa es la cantidad que se acota abajo.
 
-$$\|g - g_k\| \leq \|g\| \cdot \frac{\sigma_{k+1}(W)}{\sigma_k(W)}$$
+**Teorema SMA-3 (Preservación de Gradientes Importantes, corregido).**
+Sea $g_h = \partial\mathcal{L}/\partial h \in \mathbb{R}^d$ el gradiente de la loss respecto a la activación de salida $h=Wx$, y sea $g_x = W^Tg_h$ el gradiente propagado hacia la entrada $x$. Sea $g_{h,k}=U_kU_k^Tg_h$ la proyección de $g_h$ retenida por SMA y $g_{x,k}=W^Tg_{h,k}$ el gradiente propagado usando solo esa proyección. Entonces, **sin hipótesis adicionales sobre $g_h$**:
 
-donde $\sigma_j(W)$ son los valores singulares de la matriz de peso $W$.
+$$\|g_x - g_{x,k}\| \leq \sigma_{k+1}(W) \cdot \|g_h\|$$
 
-*Demostración.* El gradiente de la capa lineal $y = Wx$ es $g_y = W^{-T} g_h$ (para la capa hacia adelante). El gradiente wrt $h$ que fluye hacia atrás es:
+*Demostración.* Sea $g_h^\perp = g_h - g_{h,k} = U_\perp U_\perp^T g_h$ la componente descartada. Por linealidad, $g_x - g_{x,k} = W^Tg_h^\perp$. Usando $W=U\Sigma V^T$:
 
-$$\frac{\partial\mathcal{L}}{\partial h} = \left(\frac{\partial W}{\partial h}\right)^T \cdot g_y + \ldots$$
+$$W^Tg_h^\perp = V\Sigma^T U^T g_h^\perp$$
 
-Para la skip connection o residual, el gradiente pasa directamente. Para las capas donde se aplica SMA, el gradiente respecto a la entrada es $g_h = W^T g_y$. La componente que pasa por el subspace $U_k$ es:
+Como $g_h^\perp$ vive enteramente en el subespacio de $U_\perp$, $U^Tg_h^\perp$ tiene componentes nulas en las primeras $k$ coordenadas; solo el bloque $\Sigma_\perp = \text{diag}(\sigma_{k+1},\ldots)$ actúa sobre él. Por lo tanto, usando que $V$ y $U_\perp$ tienen columnas ortonormales:
 
-$$\|g_h - U_k U_k^T g_h\| = \|U_\perp U_\perp^T g_h\| \leq \|U_\perp\| \cdot \|U_\perp^T g_h\| = \|g_h^{\perp}\|$$
+$$\|W^Tg_h^\perp\| = \|\Sigma_\perp U_\perp^Tg_h^\perp\| \leq \sigma_{k+1}(W)\cdot\|U_\perp^Tg_h^\perp\| = \sigma_{k+1}(W)\cdot\|g_h^\perp\| \leq \sigma_{k+1}(W)\cdot\|g_h\|$$
 
-Por la relación de valores singulares: $\|g_h^{\perp}\| / \|g_h\| \leq \sigma_{k+1}(W) / \sigma_1(W) \leq \sigma_{k+1}(W) / \sigma_k(W)$ si $\sigma_1 \approx \sigma_k$ (buen conditioning). $\blacksquare$
+ya que $\|g_h^\perp\|\leq\|g_h\|$ (proyección ortogonal). $\blacksquare$
+
+*Remark 8.2.* Esta es una cota absoluta, no relativa: depende de $\sigma_{k+1}(W)$ solo (el valor singular inmediatamente descartado), no de un cociente $\sigma_{k+1}/\sigma_k$ que requeriría conocer cuán "picuda" es la caída espectral. Para matrices bien comprimibles ($\sigma_{k+1}$ pequeño en términos absolutos, no solo relativos a $\sigma_k$), el error de propagación es pequeño independientemente de cómo se alinee $g_h$ con el espectro de $W$.
 
 **Teorema SMA-4 (Comparación con Activation Checkpointing Estándar).**
 Sea $C_{full} = d \cdot d_i$ el costo de almacenar la activación completa $h$ (1 tensor de $d$ floats), y $C_{SMA} = 2k$ el costo de almacenar la proyección espectral $s = U_k^T h$ (2 tensors: $s$ y $U_k^T$). El factor de compresión es:
@@ -1554,20 +1514,16 @@ SMA aplica a capas donde:
 
 **Idea:** Elegir la inicialización de $\theta$ (los pesos del MLP de modulación) tal que el número de condición de la matriz de modulación sea óptimo. Esto acelera la convergencia temprana.
 
-**Teorema 8.2.1 (Convergencia y Número de Condición).**
-Sea $M \in \mathbb{R}^{d \times d}$ la matriz de modulación con valores propios $\lambda_1 \geq \lambda_2 \geq \ldots \geq \lambda_d > 0$ y número de condición $\kappa = \lambda_1/\lambda_d$. La solución de $\min_\theta \mathcal{L}(\theta)$ converge con rate:
+*Corrección (2026-07-20).* La versión anterior de este teorema conflaba dos objetos matemáticos distintos bajo el mismo símbolo. $M$, "la matriz de modulación", se introduce con eigenvalores $\lambda_i$ y se usa para definir $\kappa=\lambda_1/\lambda_d$ — pero por su nombre y por su uso en 8.2.2-8.2.4, $M$ es en realidad el **Jacobiano local de $m_\theta$ respecto a su entrada $h$** en un punto $h_0$ (dimensión $d\times d$, $d$=dimensión oculta). El teorema, sin embargo, aplica la tasa de convergencia de SGD a $\min_\theta\mathcal{L}(\theta)$ — la minimización de la **loss de entrenamiento respecto a los parámetros $\theta$** (dimensión = número de parámetros, no $d$) — y su demostración asume directamente "$H=M^TM$" donde $H$ es la Hessiana de $\mathcal{L}$ respecto a $\theta$. Esa identidad no está justificada: no hay relación establecida entre la curvatura de $m_\theta$ como función de su *entrada* y la curvatura de la loss como función de sus *parámetros* — son Hessianas de objetos diferentes, con dominios de dimensión distinta en general. Aquí se separan explícitamente ambos objetos y se corrige el teorema a lo que es efectivamente demostrable.
 
-$$\mathbb{E}[\|\theta_t - \theta^*\|] \leq \left(1 - \frac{2\mu}{\kappa}\right)^t \|\theta_0 - \theta^*\| + O(\eta)$$
+**Teorema 8.2.1 (Convergencia de SGD, versión estándar — corregido).**
+Sea $H_\mathcal{L}(\theta) = \nabla^2_\theta\mathcal{L}(\theta)$ la Hessiana de la loss respecto a los parámetros $\theta$, con número de condición $\kappa_\mathcal{L} = \lambda_{\max}(H_\mathcal{L})/\lambda_{\min}(H_\mathcal{L})$ y $\mu=\lambda_{\min}(H_\mathcal{L})$. Este es el resultado **estándar** de convergencia de SGD (no específico a HFISC): para $\eta < 2/\mu$,
 
-para SGD con learning rate $\eta < 2/\mu$ y $\mu = \lambda_d$ (mínimo valor propio de la Hessiana de $\mathcal{L}$).
+$$\mathbb{E}[\|\theta_t - \theta^*\|] \leq \left(1 - \frac{2\mu}{\kappa_\mathcal{L}}\right)^t \|\theta_0 - \theta^*\| + O(\eta)$$
 
-Minimizar $\kappa$ maximiza la velocidad de convergencia. Para lograr $\kappa \approx 1$, inicializar los pesos del MLP de modulación de forma que la Hessiana de $m_\theta$ sea cercana a la identidad.
+*Demostración.* Estándar: $\theta_{t+1}-\theta^* = (I-\eta H_\mathcal{L})(\theta_t-\theta^*)$ cerca del óptimo (aproximación cuadrática de $\mathcal{L}$), con $\eta$ elegido para minimizar $\max_i|1-\eta\lambda_i|$ sobre el espectro de $H_\mathcal{L}$, dando factor $(\kappa_\mathcal{L}-1)/(\kappa_\mathcal{L}+1) \to 0$ cuando $\kappa_\mathcal{L}\to1$. $\blacksquare$
 
-*Demostración.* La dinámica de SGD cerca del óptimo es aproximadamente $\theta_{t+1} - \theta^* = (I - \eta H)(\theta_t - \theta^*)$ donde $H$ es la Hessiana de $\mathcal{L}$. Si $H = M^T M$ (caso cuadrático), entonces sus valores propios son $\lambda_i^2$ y:
-
-$$\|\theta_t - \theta^*\| \leq \max_i |1 - \eta \lambda_i^2| \cdot \|\theta_0 - \theta^*\|$$
-
-Elegir $\eta$ óptimo: $\eta^* = 2/(\lambda_1^2 + \lambda_d^2)$, dando $\max_i |1 - \eta^* \lambda_i^2| = (\lambda_1 - \lambda_d)/(\lambda_1 + \lambda_d) = (\kappa - 1)/(\kappa + 1)$. Para $\kappa \to 1$: convergencia mucho más rápida. $\blacksquare$
+*Lo que HFISC realmente afecta.* HFISC controla el número de condición $\kappa_J$ del Jacobiano local de $m_\theta$ respecto a su entrada, $J_{m_\theta}(h_0)$ (objeto de dimensión $d$, ver Teorema 8.2.2), **no** $\kappa_\mathcal{L}$ directamente. La conexión entre "el sub-módulo de modulación tiene un Jacobiano de entrada bien condicionado en $t=0$" y "la loss completa $\mathcal{L}(\theta)$ tiene una Hessiana de parámetros mejor condicionada durante el entrenamiento temprano" es una hipótesis heurística plausible (un sub-módulo cerca de la identidad no distorsiona ni amplifica gradientes que fluyen a través de él, lo cual favorece condicionamiento aguas arriba) pero **no está demostrada** en este documento y no debe presentarse como corolario del Teorema 8.2.1. El Teorema 8.2.1 corregido es el resultado estándar de SGD, citado aquí como referencia de por qué un buen condicionamiento (del objeto que sea) ayuda; los Teoremas 8.2.2-8.2.4 sí son correctos y auto-contenidos porque prueban afirmaciones sobre $J_{m_\theta}(h_0)$ exclusivamente, sin invocar $H_\mathcal{L}$.
 
 **Teorema 8.2.2 (Inicialización Óptima).**
 Sea $m_\theta$ el MLP de modulación con pesos $\theta = (W_1, b_1, W_2, b_2)$. Asumimos $m_\theta(h) = W_2 \sigma(W_1 h + b_1) + b_2$ con $\sigma$ = GELU. Para que la Hessiana de $m_\theta$ sea cercana a la identidad en un punto $h_0$, basta con inicializar:
