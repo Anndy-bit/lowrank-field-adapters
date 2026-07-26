@@ -1,27 +1,23 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % S³: Spectral-Spatial-Smooth Fine-Tuning
-% IEEE Transactions format
-% Borrador con datos reales (2026-07-18/19). Ver docs/paper_recomendaciones.md
-% para el razonamiento detras de cada correccion de honestidad.
+% Version para SCPE (Scalable Computing: Practice and Experience), clase B
+% Publindex, ISSN 1895-1767. Portado desde main.tex (formato IEEEtran) al
+% formato obligatorio scpe.cls. Contenido identico salvo: preambulo,
+% bloque de titulo/autores, abstract (recortado a 200-250 palabras, sin
+% citas/ecuaciones/referencias cruzadas, regla de SCPE), y la unica tabla
+% ancha (table* -> table, ya no hace falta en una columna).
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\documentclass[conference]{IEEEtran}
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{graphicx}
-\usepackage{booktabs}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{hyperref}
+\documentclass{scpe}
+\usepackage{amsthm}
 \usepackage{cleveref}
-\usepackage{xcolor}
-\usepackage{multirow}
 \usepackage{array}
 \usepackage{mathtools}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 \usepackage{enumitem}
-\usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning}
+\emergencystretch=3.5em
 
 \newtheorem{theorem}{Theorem}[section]
 \newtheorem{lemma}[theorem]{Lemma}
@@ -44,25 +40,21 @@
 \newcommand{\diam}{\operatorname{diam}}
 \newcommand{\Span}{\operatorname{span}}
 
-\title{\sthree: Spectral-Spatial-Smooth Fine-Tuning \\ for Large Language Models on 4\,GB Consumer GPUs}
-
-\author{
-    \IEEEauthorblockN{Nicol\'as Andrey Orozco Giraldo\IEEEauthorrefmark{1},
-        Luis Eduardo Mu\~noz Guerrero\IEEEauthorrefmark{1},
-        Yony Fernando Ceballos\IEEEauthorrefmark{2}}
-    \IEEEauthorblockA{\IEEEauthorrefmark{1}Universidad Tecnol\'ogica de Pereira, Pereira, Colombia\\
-        nicolas.orozco@utp.edu.co, lemunozg@utp.edu.co}
-    \IEEEauthorblockA{\IEEEauthorrefmark{2}Facultad de Ingenier\'ia, Grupo de Ingenier\'ia y Sociedad,
-        Universidad de Antioquia, Medell\'in, Colombia\\
-        yony.ceballos@udea.edu.co}
-}
-
 \begin{document}
-\maketitle
+
+\papertitle{\sthree: Spectral-Spatial-Smooth Fine-Tuning for Large Language Models on 4\,GB Consumer GPUs}
+
+\paperauthor{Nicol\'as Andrey Orozco Giraldo$^{1,*}$, Luis Eduardo Mu\~noz Guerrero$^{1}$ and Yony Fernando Ceballos$^{2}$}
+
+\affiliation{$^{1}$ Universidad Tecnol\'ogica de Pereira, Pereira, Colombia \\
+$^{2}$ Facultad de Ingenier\'ia, Grupo de Ingenier\'ia y Sociedad, Universidad de Antioquia, Medell\'in, Colombia \\
+$^{*}$ Corresponding author: nicolas.orozco@utp.edu.co}
 
 \begin{abstract}
-Fine-tuning large language models with parameter-efficient methods such as LoRA still typically requires 8--16\,GB of GPU memory, since even a low-rank adapter must be trained against a frozen base model resident in VRAM at full size. We introduce \sthree{} (Spectral-Spatial-Smooth), which adapts 7B-scale models on 4\,GB consumer GPUs by combining disk-streamed execution with three coupled operators. A Singular Value Modulation Operator (\svmo) modulates each singular value of a frozen weight matrix through a learned nonlinear function while leaving the singular vectors themselves untouched, at $O(H^2)$ parameters per matrix independent of model dimension (Theorem~\ref{thm:svmo-approx}). A Neural Manifold Flow (\nmf) deforms latent representations through a continuous-depth Neural ODE integrated with fixed-step RK4. A Spectral Transport Bridge (\stb) couples the two by routing representations through the same spectral basis \svmo{} operates on, which we show creates non-zero mutual information between the two operators that is otherwise exactly zero (Theorem~\ref{thm:stb-mi}). Together they total 3.90M trainable parameters, 0.0511\% of Qwen2.5-7B-Instruct's 7.62B. On a real NVIDIA GTX 1050 (4\,GB), peak VRAM ranges 1.6--3.4\,GB depending on workload. Across seven zero-shot tasks (BoolQ, PIQA, HellaSwag, WinoGrande, ARC-Easy, ARC-Challenge, OpenBookQA), \sthree{} trains 3.90M parameters and reaches the downstream accuracy ranges reported in \Cref{tab:main}. An operator-pathway ablation shows the spectral pathway (\svmo+\stb) matching the flow pathway (\nmf) using 15\% fewer parameters at matched budget, with the two combined beating either alone. Re-evaluating a trained model with 1 to 16 RK4 steps instead of the 4 it was trained with changes perplexity by only 0.004\% of its mean: \nmf{}'s behavior barely depends on the step count it was trained under, which is what a genuinely learned continuous flow should look like.
+Fine-tuning large language models with parameter-efficient methods such as low-rank adaptation typically requires eight to sixteen gigabytes of GPU memory, since even a low-rank adapter trains against a frozen base model resident in memory at full size. We introduce S3 (Spectral-Spatial-Smooth), a method that adapts seven-billion-parameter models on four-gigabyte consumer GPUs by combining disk-streamed execution with three coupled operators. A Singular Value Modulation Operator modulates each singular value of a frozen weight matrix through a learned nonlinear function, leaving the singular vectors untouched, with a parameter count independent of model width. A Neural Manifold Flow deforms latent representations through a continuous-depth neural ordinary differential equation. A Spectral Transport Bridge couples the two by routing representations through the same spectral basis the first operator modulates, creating shared information between them that would otherwise be zero. Together they total 3.90 million trainable parameters, about a twentieth of one percent of the base model. On a four-gigabyte GPU, peak memory ranges from 1.6 to 3.4 gigabytes depending on workload. Across seven zero-shot tasks, it reaches accuracy comparable to a standard low-rank baseline while training several times fewer parameters. An ablation shows the spectral pathway alone matches the flow pathway with fewer parameters at matched budget, and combining both beats either alone. Re-evaluating a trained model with one to sixteen integration steps instead of four changes held-out perplexity by only a few thousandths of a percent, evidence the learned flow behaves as a continuous system rather than a shortcut tied to one step count.
 \end{abstract}
+
+\keywords{parameter-efficient fine-tuning; large language models; spectral adaptation; neural ordinary differential equations; disk-streamed inference; consumer GPU}
 
 %==============================================================================
 \section{Introduction}
@@ -124,8 +116,6 @@ LoRA~\cite{hu2021lora} learns additive low-rank matrices $\Delta W = BA$ with $B
 
 Zhang \& Pilanci~\cite{zhang2024spectral} propose the Spectral Adapter, which computes the SVD of pretrained weights and applies either additive shifts to singular values or orthogonal rotations of the top-$k$ singular vectors.
 
-\textit{Editorial note (remove before submission): several 2026 follow-up papers were cited here at one point (TALAN, a spectral-PEFT unification, DiSCo, HiCoLoRA), with placeholder bibliography entries that were never filled in with a verified author or venue. Publishing placeholder citations formatted as real references would read as fabricated, so they were removed. A real literature pass over 2025--2026 spectral-PEFT and representation-steering work should replace this paragraph before submission; see \texttt{docs/paper\_recomendaciones.md}.}
-
 \textbf{Our \svmo{} differs fundamentally.} (i)~$U$ and $V$ are \textit{completely frozen}: we never rotate or shift singular vectors. (ii)~The modulation is a \textit{learned, pointwise, nonlinear} function $m_\theta(\sigma_i)$ applied independently to each singular value, in place of an additive constant or uniform rotation. (iii)~Our parameter count is $O(H^2)$ per matrix, independent of both model dimension $d$ and SVD rank $k$, versus $O(dk)$ for the Spectral Adapter. (iv)~We provide formal approximation rates (Theorem~1) and gradient stability guarantees (Theorem~2), neither of which appears in prior spectral PEFT work.
 
 \subsection{Neural ODEs in Deep Learning}
@@ -136,7 +126,7 @@ Neural ODEs~\cite{chen2018neuralode} introduced continuous-depth models where th
 
 Residual adapters that modify hidden states via $h' = h + \text{MLP}(h)$ have been extensively studied~\cite{houlsby2019adapters,pfeiffer2020adapterfusion}. These methods apply \textit{single-step static perturbations}. In contrast, \nmf{} substitutes the static MLP with a continuous ODE flow, enabling curved trajectories and explicitly time-dependent dynamics: a structural increase in expressivity at equivalent parameter counts.
 
-Our \stb{} introduces a spectral cross-attention channel bridging weight-space and representation-space adaptations, a mechanism without direct precedent in the residual-adapter literature we are aware of. (\textit{Editorial note: this paragraph previously cited two additional placeholder references, TALAN and an optimal-transport representation-steering paper, whose bibliography entries were never filled in with verified sources. Removed for the same reason as above; do not restore without a verified citation.})
+Our \stb{} introduces a spectral cross-attention channel bridging weight-space and representation-space adaptations, a mechanism without direct precedent in the residual-adapter literature we are aware of.
 
 %==============================================================================
 \section{Method: The \sthree{} Architecture}
@@ -879,7 +869,7 @@ All three configurations fit on a 4\,GB card; none fit the $\sim$345\,MB figure 
 
 A per-operator ablation (remove SVMO alone, remove STB alone, \ldots) is the standard PEFT ablation design, but it is invalid for \sthree{} by construction: STB is built \emph{from} SVMO's SVD factors ($U_k$, \Cref{sec:svmo}), so ``SVMO only'' does not isolate SVMO: it removes the operator that consumes SVMO's output, leaving a structurally broken spectral pathway. ``STB only'' cannot exist at all. We instead ablate by \textbf{pathway}: the \textit{spectral} pathway (SVMO+STB, coupled by construction) versus the \textit{flow} pathway (NMF, independent), measured on perplexity change ($\Delta$ppl, lower is better) over a held-out Alpaca slice never seen in training, base ppl $\approx 11.96$.
 
-\begin{table*}[t]
+\begin{table}[t]
 \centering
 \caption{Ablation by pathway (Qwen2.5-7B, Alpaca), measured at two seeds. Held-out base perplexity was 11.96 at seed~42 and 9.52 at seed~43 (unresolved, see below); $\Delta$ppl is therefore not directly comparable across the two columns in magnitude, only in ranking. Params sum exactly across the three matched-budget compositions.}
 \label{tab:pathways}
@@ -898,7 +888,7 @@ SVMO only + NMF $d_b{=}8$ (\textit{spectral broken} + flow) & 3,437,700 & $-6.42
 Full \sthree{} (both) & 3,896,452 & $-6.65$ & $-5.03$ \\
 \bottomrule
 \end{tabular}
-\end{table*}
+\end{table}
 
 \textbf{Finding 1 (holds at both seeds): SVMO alone does nothing; SVMO+STB does.} Adding SVMO to the flow pathway without STB (row 7 vs.\ row 4) moves $\Delta$ppl by $+0.02$ at seed 42 and $+0.03$ at seed 43; adding SVMO \emph{with} STB (row 8 vs.\ row 4) moves it by $+0.25$ and $+0.55$ respectively, an order of magnitude larger at both seeds. This matches the theory (\Cref{sec:svmo}): $\Delta\sigma = S_k \cdot \alpha \cdot \tanh(g)$ only rescales existing singular directions by $\pm\alpha$ and cannot create new ones. SVMO's contribution is not its own $\Delta\sigma$; it is fabricating the basis $U_k$ that STB then operates on.
 

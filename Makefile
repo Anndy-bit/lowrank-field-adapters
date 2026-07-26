@@ -1,7 +1,7 @@
 # S³ — Spectral-Spatial-Smooth Fine-Tuning
 # Complete workflow from SVD to benchmarks
 
-.PHONY: help venv svd train evaluate all clean test
+.PHONY: help venv svd train evaluate all clean test paper
 
 VENV = .venv
 PYTHON = $(VENV)/bin/python
@@ -11,6 +11,8 @@ MODEL ?= Qwen/Qwen2.5-7B-Instruct
 K ?= 128
 CONFIG ?= experiments/configs/s3_standard.yaml
 DEVICE ?= cuda:0
+
+PAPER_NAME ?= S-cube: (Spectral-Spatial-Smooth)
 
 help:
 	@echo "S³ Fine-Tuning Pipeline"
@@ -23,6 +25,7 @@ help:
 	@echo "  make all           Full pipeline: venv → svd → train → evaluate"
 	@echo "  make clean         Remove checkpoints and results"
 	@echo "  make test          Run unit tests"
+	@echo "  make paper         Compile paper/main.tex to 'paper/\$$(PAPER_NAME).pdf'"
 	@echo ""
 	@echo "Variables:"
 	@echo "  MODEL              HuggingFace model (default: Qwen/Qwen2.5-7B-Instruct)"
@@ -131,3 +134,7 @@ clean:
 
 setup: venv svd
 	@echo "[Setup] Ready for training."
+
+paper:
+	@echo "[Paper] Compiling paper/main.tex -> paper/$(PAPER_NAME).pdf ..."
+	cd paper && latexmk -pdf -interaction=nonstopmode -jobname="$(PAPER_NAME)" main.tex

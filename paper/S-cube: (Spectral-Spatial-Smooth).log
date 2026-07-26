@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.7.5)  24 JUL 2026 21:44
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.7.5)  25 JUL 2026 07:25
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -812,8 +812,8 @@ File: l3backend-pdftex.def 2024-01-04 L3 backend support: PDF output (pdfTeX)
 \l__color_backend_stack_int=\count334
 \l__pdf_internal_box=\box72
 )
-(./main.aux)
-\openout1 = `main.aux'.
+(./S-cube: (Spectral-Spatial-Smooth).aux)
+\openout1 = `"S-cube: (Spectral-Spatial-Smooth).aux"'.
 
 LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 60.
 LaTeX Font Info:    ... okay on input line 60.
@@ -859,9 +859,10 @@ e
 ))
 Package hyperref Info: Link coloring OFF on input line 60.
 
-(./main.out) (./main.out)
+(./S-cube: (Spectral-Spatial-Smooth).out)
+(./S-cube: (Spectral-Spatial-Smooth).out)
 \@outlinefile=\write4
-\openout4 = `main.out'.
+\openout4 = `"S-cube: (Spectral-Spatial-Smooth).out"'.
 
 LaTeX Font Info:    Calculating math sizes for size <24> on input line 62.
 LaTeX Font Info:    Trying to load font information for U+msa on input line 62.
@@ -1013,20 +1014,20 @@ pdfTeX warning (ext4): destination with the same identifier (name{figure.1}) ha
 s been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.739 \end{align}
-                 
+l.742 
+      
 pdfTeX warning (ext4): destination with the same identifier (name{table.1}) has
  been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.739 \end{align}
-                 
+l.742 
+      
 pdfTeX warning (ext4): destination with the same identifier (name{table.2}) has
  been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.739 \end{align}
-                 ] [10]
+l.742 
+      ] [10]
 Underfull \hbox (badness 4303) in paragraph at lines 814--815
 []\T1/ptm/m/n/10 All re-sults in this sec-tion are mea-sured, not pro-
  []
@@ -1053,16 +1054,14 @@ pdfTeX warning (ext4): destination with the same identifier (name{table.3}) has
  been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.905 ...matched low budget, spectral beats flow.}
-                                                   SVMO+STB (685K params, ro...
-
+l.906 
+      
 pdfTeX warning (ext4): destination with the same identifier (name{table.4}) has
  been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.905 ...matched low budget, spectral beats flow.}
-                                                   SVMO+STB (685K params, ro...
-]
+l.906 
+      ]
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
 (hyperref)                removing `\mathsurround' on input line 942.
@@ -1110,22 +1109,25 @@ Before submitting the final camera ready copy, remember to:
  uses only Type 1 fonts and that every step in the generation
  process uses the appropriate paper size.
 
-[14] (./main.aux)
+[14
+
+] (./S-cube: (Spectral-Spatial-Smooth).aux)
  ***********
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-22>
  ***********
-Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: 45D1204AF6DE7B65F6E58E6A742C8BB0;9919.
+Package rerunfilecheck Info: File `"S-cube: (Spectral-Spatial-Smooth)".out' has
+ not changed.
+(rerunfilecheck)             Checksum: 53307D1FF09628DB9E0888FCCD47A353;9868.
  ) 
 Here is how much of TeX's memory you used:
- 25615 strings out of 474222
- 478763 string characters out of 5748734
+ 25618 strings out of 474222
+ 479364 string characters out of 5748734
  1959975 words of memory out of 5000000
- 47253 multiletter control sequences out of 15000+600000
+ 47255 multiletter control sequences out of 15000+600000
  725607 words of font info for 215 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 84i,18n,87p,2017b,744s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 84i,18n,87p,1982b,744s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></us
 r/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/shar
 e/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb></usr/share/texli
@@ -1151,10 +1153,11 @@ usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/share/texli
 ve/texmf-dist/fonts/type1/urw/times/utmbi8a.pfb></usr/share/texlive/texmf-dist/
 fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw
 /times/utmri8a.pfb>
-Output written on main.pdf (14 pages, 449393 bytes).
+Output written on "S-cube: (Spectral-Spatial-Smooth).pdf" (14 pages, 448696 byt
+es).
 PDF statistics:
- 663 PDF objects out of 1000 (max. 8388607)
- 587 compressed objects within 6 object streams
+ 667 PDF objects out of 1000 (max. 8388607)
+ 591 compressed objects within 6 object streams
  184 named destinations out of 1000 (max. 500000)
  373 words of extra memory for PDF output out of 10000 (max. 10000000)
 
